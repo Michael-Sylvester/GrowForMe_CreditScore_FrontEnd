@@ -341,48 +341,168 @@ html, body, [class*="css"] {
 
 # ─── Constants ───────────────────────────────────────────────────────────────
 
-# Features the API expects (snake_case, matching the FastAPI payload schema)
-API_FEATURES = [
-    "farmer_id", "farmer_name", "gender", "region",
-    "drought_flood_index", "savings_ghs", "payment_frequency",
-    "crop_types", "is_association_member", "has_motorbike",
-    "acres", "satellite_verified", "repayment_rate",
-    "yield_data", "endorsements", "irrigation_type",
-    "irrigation_scheme", "market_access_index", "training_sessions",
-    "livestock_value_ghs", "alternative_income_ghs", "insurance_type",
-    "insurance_subscription", "digital_score", "soil_health_index",
-    "farmer_budget_ghs",
-]
-
-# CSV column → API field mapping
-CSV_TO_API = {
-    "Farmer Id":             "farmer_id",
-    "Farmer Name":           "farmer_name",
-    "Gender":                "gender",
-    "Region":                "region",
-    "Drought Flood Index":   "drought_flood_index",
-    "Savings Ghs":           "savings_ghs",
-    "Payment Frequency":     "payment_frequency",
-    "Crop Types":            "crop_types",
-    "Is Association Member": "is_association_member",
-    "Has Motorbike":         "has_motorbike",
-    "Acres":                 "acres",
-    "Satellite Verified":    "satellite_verified",
-    "Repayment Rate":        "repayment_rate",
-    "Yield Data":            "yield_data",
-    "Endorsements":          "endorsements",
-    "Irrigation Type":       "irrigation_type",
-    "Irrigation Scheme":     "irrigation_scheme",
-    "Market Access Index":   "market_access_index",
-    "Training Sessions":     "training_sessions",
-    "Livestock Value Usd":   "livestock_value_ghs",   # will be treated as GHS equiv
-    "Alternative Income Usd":"alternative_income_ghs",
-    "Insurance Type":        "insurance_type",
-    "Insurance Subscription":"insurance_subscription",
-    "Digital Score":         "digital_score",
-    "Soil Health Index":     "soil_health_index",
-    "Farmer Budget Ghs":     "farmer_budget_ghs",
+ENDPOINTS = {
+    "ML-based (XGBoost)": "/score/xgboost",
+    "Rule-based":          "/score/rule-based",
 }
+
+RESPONSE_KEY = {
+    "ML-based (XGBoost)": "xgboost",
+    "Rule-based":          "rule_based",
+}
+
+DEFAULT_BASE_URL = "http://localhost:8000"
+
+# Boolean sentinel values in the raw CSV
+_BOOL_VALS = {"TRUE", "FALSE"}
+
+
+def _parse_raw_line(line: str) -> dict:
+    """
+    Parse one raw CSV data line (already split on commas) into a clean dict.
+
+    The CSV is malformed because `crop_types` and `yield_data` contain
+    unquoted commas, making a naive pd.read_csv() shift every column after
+    them. We parse positionally instead:
+
+    Fixed positions (0-based):
+      0   farmer_id
+      1   farmer_name
+      2   gender
+      3   region
+      4   drought_flood_index
+      5   savings_ghs
+      6   savings_usd          (not sent to API)
+      7   payment_frequency
+      8   farmer_budget_ghs
+      9…  crop_types           (1–3 values, ends when TRUE/FALSE is seen)
+      +0  is_association_member
+      +1  has_motorbike
+      +2  acres
+      +3  satellite_verified
+      +4  repayment_rate
+      +5… yield_data           (variable count; 13 fixed fields follow it)
+      …
+      -13 endorsements
+      -12 irrigation_type
+      -11 irrigation_scheme
+      -10 market_access_index
+      -9  training_sessions
+      -8  livestock_value_usd
+      -7  alternative_income_usd
+      -6  insurance_type
+      -5  insurance_subscription
+      -4  digital_score
+      -3  soil_health_index
+      -2  credit_score         (not sent to API)
+      -1  creditworthiness     (not sent to API)
+    """
+    vals = line.strip().split(",")
+    idx = 0
+
+    def take():
+        nonlocal idx
+        v = vals[idx]; idx += 1
+        return v.strip()
+
+    r = {}
+    r["farmer_id"]            = take()
+    r["farmer_name"]          = take()
+    r["gender"]               = take()
+    r["region"]               = take()
+    r["drought_flood_index"]  = take()
+    r["savings_ghs"]          = take()
+    _savings_usd              = take()          # skip – not in API
+    r["payment_frequency"]    = take()
+    r["farmer_budget_ghs"]    = take()
+
+    # crop_types: collect tokens until we hit TRUE/FALSE
+    crops = []
+    while idx < len(vals) and vals[idx].strip() not in _BOOL_VALS:
+        crops.append(take())
+    r["crop_types"] = ",".join(crops)
+
+    r["is_association_member"] = take()
+    r["has_motorbike"]         = take()
+    r["acres"]                 = take()
+    r["satellite_verified"]    = take()
+    r["repayment_rate"]        = take()
+
+    # yield_data: everything up to the 13 tail-fixed fields
+    tail_count = 13   # endorsements … creditworthiness
+    n_yield = len(vals) - idx - tail_count
+    yield_vals = [take() for _ in range(n_yield)]
+    r["yield_data"] = ",".join(yield_vals)
+
+    r["endorsements"]           = take()
+    r["irrigation_type"]        = take()
+    r["irrigation_scheme"]      = take()
+    r["market_access_index"]    = take()
+    r["training_sessions"]      = take()
+    r["livestock_value_ghs"]    = take()   # CSV calls it _usd but we pass as GHS
+    r["alternative_income_ghs"] = take()
+    r["insurance_type"]         = take()
+    r["insurance_subscription"] = take()
+    r["digital_score"]          = take()
+    r["soil_health_index"]      = take()
+    _credit_score               = take()   # already known – skip
+    _creditworthiness           = take()   # already known – skip
+
+    return r
+
+
+def _coerce(val: str):
+    """Convert a string token to the most appropriate native Python type."""
+    if isinstance(val, str):
+        u = val.strip().upper()
+        if u == "TRUE":  return True
+        if u == "FALSE": return False
+        # Try int first, then float, then leave as string
+        try:    return int(val)
+        except ValueError: pass
+        try:    return float(val)
+        except ValueError: pass
+    # numpy scalars → native Python
+    import numpy as np
+    if isinstance(val, (np.integer,)):  return int(val)
+    if isinstance(val, (np.floating,)): return float(val)
+    if isinstance(val, (np.bool_,)):    return bool(val)
+    return val
+
+
+def load_csv(file_obj) -> list[dict]:
+    """
+    Read the uploaded CSV and return a list of clean farmer dicts,
+    correctly handling unquoted commas inside crop_types and yield_data.
+    """
+    content = file_obj.read().decode("utf-8")
+    lines = [l for l in content.splitlines() if l.strip()]
+    # skip header row
+    rows = []
+    for line in lines[1:]:
+        parsed = _parse_raw_line(line)
+        # coerce every value to native Python type
+        rows.append({k: _coerce(v) for k, v in parsed.items()})
+    return rows
+
+
+def build_payload(farmer: dict) -> dict:
+    """
+    Build the exact JSON payload the FastAPI backend expects.
+    Only includes fields the API accepts; all values are native Python types.
+    """
+    API_FIELDS = [
+        "farmer_id", "farmer_name", "gender", "region",
+        "drought_flood_index", "savings_ghs", "payment_frequency",
+        "crop_types", "is_association_member", "has_motorbike",
+        "acres", "satellite_verified", "repayment_rate",
+        "yield_data", "endorsements", "irrigation_type",
+        "irrigation_scheme", "market_access_index", "training_sessions",
+        "livestock_value_ghs", "alternative_income_ghs", "insurance_type",
+        "insurance_subscription", "digital_score", "soil_health_index",
+        "farmer_budget_ghs",
+    ]
+    return {k: farmer[k] for k in API_FIELDS if k in farmer}
 
 ENDPOINTS = {
     "ML-based (XGBoost)": "/score/xgboost",
@@ -396,29 +516,13 @@ RESPONSE_KEY = {
 
 DEFAULT_BASE_URL = "http://localhost:8000"
 
+
 # ─── Session State Init ───────────────────────────────────────────────────────
-if "results"      not in st.session_state: st.session_state.results      = {}
-if "page_idx"     not in st.session_state: st.session_state.page_idx     = 0
-if "farmer_df"    not in st.session_state: st.session_state.farmer_df    = None
+if "results"  not in st.session_state: st.session_state.results  = {}
+if "page_idx" not in st.session_state: st.session_state.page_idx = 0
+if "farmers"  not in st.session_state: st.session_state.farmers  = None  # list[dict]
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
-
-def build_payload(row: pd.Series) -> dict:
-    """Map a CSV row to the API payload dict."""
-    payload = {}
-    for csv_col, api_key in CSV_TO_API.items():
-        if csv_col not in row.index:
-            continue
-        val = row[csv_col]
-        # booleans
-        if isinstance(val, str) and val.strip().lower() in ("true", "false"):
-            val = val.strip().lower() == "true"
-        elif isinstance(val, bool):
-            pass
-        # crop_types: join multi-value columns if needed
-        payload[api_key] = val
-    return payload
-
+# ─── Additional helpers ────────────────────────────────────────────────────────
 
 def call_api(base_url: str, endpoint: str, payload: dict) -> dict | None:
     url = base_url.rstrip("/") + endpoint
@@ -454,36 +558,38 @@ def score_color(score: float) -> str:
 def extract_top_features(reasoning: str) -> list[str]:
     """Best-effort extraction of feature names from the reasoning string."""
     import re
-    # Try to find lines starting with common bullet / numbered patterns
     lines = [l.strip() for l in reasoning.split("\n") if l.strip()]
     features = []
     for line in lines:
-        # strip leading bullets / numbers
         clean = re.sub(r'^[\-\*\d\.\)]+\s*', '', line)
-        if clean and len(clean) < 80:
+        if clean and len(clean) < 100:
             features.append(clean)
         if len(features) >= 3:
             break
-    return features if features else ["See reasoning below"]
+    return features if features else ["See full reasoning below"]
 
 
 def build_results_csv() -> str:
     rows = []
-    for farmer_id, models in st.session_state.results.items():
-        for model_label, data in models.items():
-            rows.append({
-                "farmer_id":   farmer_id,
-                "model":       model_label,
-                "score":       data.get("score", ""),
-                "band":        data.get("band", ""),
-                "feature_1":   data.get("features", ["", "", ""])[0] if len(data.get("features", [])) > 0 else "",
-                "feature_2":   data.get("features", ["", "", ""])[1] if len(data.get("features", [])) > 1 else "",
-                "feature_3":   data.get("features", ["", "", ""])[2] if len(data.get("features", [])) > 2 else "",
-                "reasoning":   data.get("reasoning", ""),
-            })
+    for key, data in st.session_state.results.items():
+        parts     = key.rsplit("_", 1)
+        fid       = parts[0]
+        model_lbl = "_".join(parts[1:]) if len(parts) > 1 else "—"
+        feats     = data.get("features", [])
+        rows.append({
+            "farmer_id": fid,
+            "model":     model_lbl,
+            "score":     data.get("score", ""),
+            "band":      data.get("band", ""),
+            "feature_1": feats[0] if len(feats) > 0 else "",
+            "feature_2": feats[1] if len(feats) > 1 else "",
+            "feature_3": feats[2] if len(feats) > 2 else "",
+            "reasoning": data.get("reasoning", ""),
+        })
     if not rows:
         return ""
     return pd.DataFrame(rows).to_csv(index=False)
+
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -501,11 +607,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("<p style='font-size:0.7rem; text-transform:uppercase; letter-spacing:0.1em; color:#3db870; margin-bottom:0.5rem'>Scoring Model</p>", unsafe_allow_html=True)
-    model_choice = st.radio(
-        "Model",
-        list(ENDPOINTS.keys()),
-        label_visibility="collapsed",
-    )
+    model_choice = st.radio("Model", list(ENDPOINTS.keys()), label_visibility="collapsed")
 
     st.markdown("---")
     st.markdown("<p style='font-size:0.7rem; text-transform:uppercase; letter-spacing:0.1em; color:#3db870; margin-bottom:0.5rem'>About</p>", unsafe_allow_html=True)
@@ -547,34 +649,35 @@ uploaded = st.file_uploader(
 
 if uploaded:
     try:
-        df = pd.read_csv(uploaded)
-        st.session_state.farmer_df = df
+        farmers = load_csv(uploaded)
+        st.session_state.farmers  = farmers
         st.session_state.page_idx = 0
-        total = len(df)
+        total = len(farmers)
         st.success(f"✅ Loaded **{total} farmer{'s' if total != 1 else ''}** from `{uploaded.name}`")
-        with st.expander("Preview raw data"):
-            st.dataframe(df, use_container_width=True, height=180)
+        with st.expander("Preview parsed data"):
+            st.dataframe(pd.DataFrame(farmers), use_container_width=True, height=180)
     except Exception as e:
-        st.error(f"Could not read CSV: {e}")
+        st.error(f"Could not parse CSV: {e}")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ─── Step 2 + 3: Score & Results ─────────────────────────────────────────────
-if st.session_state.farmer_df is not None:
-    df = st.session_state.farmer_df
-    total = len(df)
-    idx   = st.session_state.page_idx
+if st.session_state.farmers:
+    farmers = st.session_state.farmers
+    total   = len(farmers)
+    idx     = st.session_state.page_idx
+    farmer  = farmers[idx]
 
     # ── Farmer navigation ──
     st.markdown(f"""
     <div class='farmer-nav'>
         <span class='farmer-badge'>Farmer {idx + 1} of {total}</span>
-        <span class='farmer-name'>{df.iloc[idx].get('Farmer Name', 'Unknown')}</span>
-        <span class='farmer-meta'>ID: {df.iloc[idx].get('Farmer Id', '—')} &nbsp;|&nbsp; {df.iloc[idx].get('Region', '—')}</span>
+        <span class='farmer-name'>{farmer.get('farmer_name', 'Unknown')}</span>
+        <span class='farmer-meta'>ID: {farmer.get('farmer_id', '—')} &nbsp;|&nbsp; {farmer.get('region', '—')}</span>
     </div>
     """, unsafe_allow_html=True)
 
-    nav_col1, nav_col2, nav_col3 = st.columns([1, 6, 1])
+    nav_col1, _, nav_col3 = st.columns([1, 6, 1])
     with nav_col1:
         if st.button("◀ Prev", disabled=(idx == 0), use_container_width=True):
             st.session_state.page_idx -= 1
@@ -584,86 +687,66 @@ if st.session_state.farmer_df is not None:
             st.session_state.page_idx += 1
             st.rerun()
 
-    row = df.iloc[idx]
-
     # ── Two-column layout ──
     left, right = st.columns([1, 1], gap="large")
 
     with left:
-        # Farmer profile card
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.markdown("<p class='card-title'>Farmer Profile</p>", unsafe_allow_html=True)
 
-        gender  = row.get("Gender", "—")
-        region  = row.get("Region", "—")
-        acres   = row.get("Acres", "—")
-        crops   = row.get("Crop Types", "—")
-        savings = row.get("Savings Ghs", "—")
-        repay   = row.get("Repayment Rate", "—")
-        digital = row.get("Digital Score", "—")
-        soil    = row.get("Soil Health Index", "—")
-
         m1, m2 = st.columns(2)
-        m1.metric("Gender",  gender)
-        m2.metric("Region",  region)
-        m1.metric("Farm Size", f"{acres} ac")
-        m2.metric("Repayment Rate", f"{repay}%")
-        m1.metric("Digital Score",  f"{digital}")
-        m2.metric("Soil Health",    f"{soil}")
+        m1.metric("Gender",         farmer.get("gender", "—"))
+        m2.metric("Region",         farmer.get("region", "—"))
+        m1.metric("Farm Size",      f"{farmer.get('acres', '—')} ac")
+        m2.metric("Repayment Rate", f"{farmer.get('repayment_rate', '—')}%")
+        m1.metric("Digital Score",  farmer.get("digital_score", "—"))
+        m2.metric("Soil Health",    farmer.get("soil_health_index", "—"))
 
-        st.markdown(f"<p style='font-size:0.82rem; color: var(--muted); margin-top: 0.5rem'>Crops &nbsp;</p>", unsafe_allow_html=True)
-        chip_html = "".join(f"<span class='info-chip'>{c.strip()}</span>" for c in str(crops).split(","))
+        crops = farmer.get("crop_types", "")
+        st.markdown("<p style='font-size:0.82rem; color: var(--muted); margin-top: 0.5rem'>Crops</p>", unsafe_allow_html=True)
+        chip_html = "".join(f"<span class='info-chip'>{c.strip()}</span>" for c in str(crops).split(",") if c.strip())
         st.markdown(chip_html, unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Payload preview
         with st.expander("🔍 View API Payload"):
-            payload = build_payload(row)
-            st.json(payload)
+            st.json(build_payload(farmer))
 
     with right:
-        # Scoring card
         st.markdown("<div class='card'>", unsafe_allow_html=True)
         st.markdown(f"<p class='card-title'>② Score with <em>{model_choice}</em></p>", unsafe_allow_html=True)
 
-        farmer_id   = str(row.get("Farmer Id", idx))
-        result_key  = f"{farmer_id}_{model_choice}"
-        cached      = st.session_state.results.get(result_key)
+        farmer_id  = str(farmer.get("farmer_id", idx))
+        result_key = f"{farmer_id}_{model_choice}"
+        cached     = st.session_state.results.get(result_key)
 
         if st.button("🚀 Get Credit Score", use_container_width=True):
-            payload  = build_payload(row)
+            payload  = build_payload(farmer)
             endpoint = ENDPOINTS[model_choice]
             with st.spinner("Calling scoring API…"):
                 raw = call_api(base_url, endpoint, payload)
 
             if raw:
-                resp_key = RESPONSE_KEY[model_choice]
-                # Handle /score/both or single-model response
+                resp_key   = RESPONSE_KEY[model_choice]
                 model_data = raw.get(resp_key, raw)
                 score      = model_data.get("score", 0)
                 band       = model_data.get("band", "—")
                 reasoning  = model_data.get("reasoning", "")
                 features   = extract_top_features(reasoning)
 
-                entry = {
+                st.session_state.results[result_key] = {
                     "score":     score,
                     "band":      band,
                     "reasoning": reasoning,
                     "features":  features,
                 }
-                if "results" not in st.session_state:
-                    st.session_state.results = {}
-                st.session_state.results[result_key] = entry
-                cached = entry
                 st.rerun()
 
         if cached:
-            score    = cached["score"]
-            band     = cached["band"]
-            features = cached["features"]
-            reasoning= cached["reasoning"]
+            score     = cached["score"]
+            band      = cached["band"]
+            features  = cached["features"]
+            reasoning = cached["reasoning"]
 
-            # Score ring
             color = score_color(score)
             bc    = band_class(band)
             st.markdown(f"""
@@ -674,13 +757,12 @@ if st.session_state.farmer_df is not None:
             </div>
             """, unsafe_allow_html=True)
 
-            # Top feature drivers
             st.markdown("<p style='font-size:0.82rem; font-weight:600; color:var(--green-800); margin:0.5rem 0 0.7rem'>Top Contributing Factors</p>", unsafe_allow_html=True)
             for i, feat in enumerate(features[:3]):
                 bar_pct = max(30, 100 - i * 20)
                 st.markdown(f"""
                 <div class='driver-row'>
-                    <span class='driver-label'>#{i+1} {feat[:28]}</span>
+                    <span class='driver-label'>#{i+1} {feat[:30]}</span>
                     <div class='driver-bar-bg'>
                         <div class='driver-bar-fill' style='width:{bar_pct}%'></div>
                     </div>
@@ -688,7 +770,6 @@ if st.session_state.farmer_df is not None:
                 </div>
                 """, unsafe_allow_html=True)
 
-            # Reasoning
             st.markdown(f"""
             <div class='reasoning-box'>
                 <strong>Model Reasoning</strong><br>
@@ -696,7 +777,7 @@ if st.session_state.farmer_df is not None:
             </div>
             """, unsafe_allow_html=True)
 
-        elif not cached:
+        else:
             st.markdown("""
             <div style='text-align:center; padding: 2rem; color: var(--muted)'>
                 <p style='font-size:2.5rem; margin:0'>📊</p>
@@ -713,34 +794,26 @@ if st.session_state.farmer_df is not None:
 
         summary_rows = []
         for key, data in st.session_state.results.items():
-            parts     = key.rsplit("_", 1)
-            fid       = parts[0]
-            model_lbl = parts[1] if len(parts) > 1 else "—"
+            parts = key.split("_", 1)
             summary_rows.append({
-                "Farmer ID": fid,
-                "Model":     model_lbl,
-                "Score":     f"{data['score']:.1f}",
-                "Band":      data["band"],
-                "Top Factor":data["features"][0] if data["features"] else "—",
+                "Farmer ID":  parts[0],
+                "Model":      parts[1] if len(parts) > 1 else "—",
+                "Score":      f"{data['score']:.1f}",
+                "Band":       data["band"],
+                "Top Factor": data["features"][0] if data["features"] else "—",
             })
 
-        st.dataframe(
-            pd.DataFrame(summary_rows),
-            use_container_width=True,
-            hide_index=True,
-        )
+        st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
 
-        csv_data = build_results_csv()
         st.download_button(
             label="⬇ Download Results CSV",
-            data=csv_data,
+            data=build_results_csv(),
             file_name=f"credit_scores_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
             mime="text/csv",
         )
         st.markdown("</div>", unsafe_allow_html=True)
 
 else:
-    # Empty state
     st.markdown("""
     <div style='text-align:center; padding: 4rem 2rem; color: var(--muted)'>
         <p style='font-size:3rem; margin:0'>🌾</p>
