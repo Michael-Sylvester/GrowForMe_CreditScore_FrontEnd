@@ -260,7 +260,7 @@ html, body, [class*="css"] {
     background: var(--green-100) !important;
 }
 
-/* ── Reasoning box ── */
+/* ── Reasoning box (fallback) ── */
 .reasoning-box {
     background: var(--green-100);
     border-left: 3px solid var(--green-500);
@@ -271,6 +271,47 @@ html, body, [class*="css"] {
     color: var(--green-900);
     margin-top: 0.8rem;
     font-family: 'DM Sans', sans-serif;
+}
+/* ── Insight sections ── */
+.insight-section {
+    border-radius: 10px;
+    margin: 0.7rem 0;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,0.07);
+}
+.insight-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+.insight-icon { font-size: 0.95rem; }
+.positive-header { background: #dcfce7; color: #14532d; }
+.drag-header     { background: #fee2e2; color: #7f1d1d; }
+.whatif-header   { background: #fef9c3; color: #713f12; }
+.insight-body    { padding: 0.75rem 0.85rem; background: var(--white); }
+.whatif-feature  {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1rem;
+    color: var(--green-800);
+    margin-bottom: 0.3rem;
+}
+.whatif-advice   { font-size: 0.85rem; color: var(--ink); line-height: 1.55; }
+.upside-badge {
+    display: inline-block;
+    background: #fef08a;
+    color: #713f12;
+    border-radius: 20px;
+    padding: 0.12rem 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    margin-left: 0.4rem;
+    vertical-align: middle;
 }
 
 /* ── Info chips ── */
@@ -351,7 +392,7 @@ RESPONSE_KEY = {
     "Rule-based":          "rule_based",
 }
 
-DEFAULT_BASE_URL = "http://localhost:8000"
+DEFAULT_BASE_URL = "https://grow4me.onrender.com"
 
 # Boolean sentinel values in the raw CSV
 _BOOL_VALS = {"TRUE", "FALSE"}
@@ -504,19 +545,6 @@ def build_payload(farmer: dict) -> dict:
     ]
     return {k: farmer[k] for k in API_FIELDS if k in farmer}
 
-ENDPOINTS = {
-    "ML-based (XGBoost)": "/score/xgboost",
-    "Rule-based":          "/score/rule-based",
-}
-
-RESPONSE_KEY = {
-    "ML-based (XGBoost)": "xgboost",
-    "Rule-based":          "rule_based",
-}
-
-DEFAULT_BASE_URL = "http://localhost:8000"
-
-
 # ─── Session State Init ───────────────────────────────────────────────────────
 if "results"  not in st.session_state: st.session_state.results  = {}
 if "page_idx" not in st.session_state: st.session_state.page_idx = 0
@@ -527,15 +555,22 @@ if "farmers"  not in st.session_state: st.session_state.farmers  = None  # list[
 def call_api(base_url: str, endpoint: str, payload: dict) -> dict | None:
     url = base_url.rstrip("/") + endpoint
     try:
-        resp = requests.post(url, json=payload, timeout=15)
+        # Render free-tier services sleep — use a longer timeout to allow cold-start wake-up
+        resp = requests.post(url, json=payload, timeout=60)
         resp.raise_for_status()
         return resp.json()
     except requests.exceptions.ConnectionError:
-        st.error(f"❌ Cannot connect to API at **{url}**. Is the server running?")
+        st.error(
+            f"❌ Cannot connect to **{url}**.\n\n"
+            "The Render service may be waking from sleep — wait ~30 seconds and try again."
+        )
     except requests.exceptions.Timeout:
-        st.error("⏱️ Request timed out. The server took too long to respond.")
+        st.error(
+            "⏱️ Request timed out (60 s). The Render service may be starting up from sleep. "
+            "Please wait a moment and try again."
+        )
     except requests.exceptions.HTTPError as e:
-        st.error(f"API returned an error: {e.response.status_code} — {e.response.text}")
+        st.error(f"API error {e.response.status_code}: {e.response.text}")
     except Exception as e:
         st.error(f"Unexpected error: {e}")
     return None
@@ -555,18 +590,125 @@ def score_color(score: float) -> str:
     return "#c0392b"
 
 
-def extract_top_features(reasoning: str) -> list[str]:
-    """Best-effort extraction of feature names from the reasoning string."""
-    import re
-    lines = [l.strip() for l in reasoning.split("\n") if l.strip()]
-    features = []
-    for line in lines:
-        clean = re.sub(r'^[\-\*\d\.\)]+\s*', '', line)
-        if clean and len(clean) < 100:
-            features.append(clean)
-        if len(features) >= 3:
-            break
-    return features if features else ["See full reasoning below"]
+
+import re as _re
+
+
+def parse_reasoning(text: str) -> dict:
+    result = {
+        "positives": [], "drags": [],
+        "whatif_feature": "", "whatif_advice": "", "whatif_upside": "",
+        "raw": text,
+    }
+
+    pos_m = _re.search(r"Top positive contributors:\s*(.+?)(?:\.\s*Biggest drags:|$)", text, _re.IGNORECASE)
+    if pos_m:
+        for item in _re.split(r";\s*", pos_m.group(1)):
+            item = item.strip().rstrip(".")
+            m = _re.match(r"(.+?)\s*\(\+?([\d.]+)\)", item)
+            if m:
+                result["positives"].append({"label": m.group(1).strip(), "value": float(m.group(2))})
+            elif item:
+                result["positives"].append({"label": item, "value": None})
+
+    drag_m = _re.search(r"Biggest drags:\s*(.+?)(?:\.\s*What-if:|$)", text, _re.IGNORECASE)
+    if drag_m:
+        for item in _re.split(r";\s*", drag_m.group(1)):
+            item = item.strip().rstrip(".")
+            m = _re.match(r"(.+?)\s*\(-(?:opportunity\s*)?([\d.]+)\)", item)
+            if m:
+                result["drags"].append({"label": m.group(1).strip(), "value": float(m.group(2))})
+            elif item:
+                result["drags"].append({"label": item, "value": None})
+
+    wi_m = _re.search(r"What-if:(.+)", text, _re.IGNORECASE | _re.DOTALL)
+    if wi_m:
+        wi = wi_m.group(1).strip()
+        feat_m   = _re.search(r"Best single what-if change:\s*(.+?)\s*->", wi, _re.IGNORECASE)
+        advice_m = _re.search(r"->\s*(.+?)(?:\.\s*Estimated|$)", wi, _re.IGNORECASE)
+        up_m     = _re.search(r"Estimated score upside:\s*\+?([\d.]+)", wi, _re.IGNORECASE)
+        if feat_m:   result["whatif_feature"] = feat_m.group(1).strip()
+        if advice_m: result["whatif_advice"]  = advice_m.group(1).strip()
+        if up_m:     result["whatif_upside"]  = up_m.group(1)
+
+    return result
+
+
+def render_reasoning(parsed: dict):
+    positives = parsed.get("positives", [])
+    drags     = parsed.get("drags", [])
+    wf        = parsed.get("whatif_feature", "")
+    wa        = parsed.get("whatif_advice", "")
+    wu        = parsed.get("whatif_upside", "")
+    raw       = parsed.get("raw", "")
+
+    if not positives and not drags and not wf:
+        st.markdown(
+            f"<div class='reasoning-box'><strong>Model Reasoning</strong><br>{raw}</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    if positives:
+        max_val = max((p["value"] or 0 for p in positives), default=1) or 1
+        rows_html = ""
+        for p in positives:
+            pct   = int((p["value"] / max_val) * 100) if p["value"] else 50
+            label = p["label"]
+            val   = f"+{p['value']:.2f}" if p["value"] is not None else ""
+            rows_html += (
+                f"<div class='driver-row'>"
+                f"<span class='driver-label'>{label}</span>"
+                f"<div class='driver-bar-bg'><div class='driver-bar-fill' "
+                f"style='width:{pct}%;background:linear-gradient(90deg,#1a8f4f,#3db870)'></div></div>"
+                f"<span class='driver-val' style='color:#1a8f4f;font-weight:600'>{val}</span>"
+                f"</div>"
+            )
+        st.markdown(
+            f"<div class='insight-section'>"
+            f"<div class='insight-header positive-header'>"
+            f"<span class='insight-icon'>📈</span><span>Top Positive Contributors</span></div>"
+            f"<div class='insight-body'>{rows_html}</div></div>",
+            unsafe_allow_html=True,
+        )
+
+    if drags:
+        max_val = max((d["value"] or 0 for d in drags), default=1) or 1
+        rows_html = ""
+        for d in drags:
+            pct   = int((d["value"] / max_val) * 100) if d["value"] else 50
+            label = d["label"]
+            val   = f"\u2212{d['value']:.2f}" if d["value"] is not None else ""
+            rows_html += (
+                f"<div class='driver-row'>"
+                f"<span class='driver-label'>{label}</span>"
+                f"<div class='driver-bar-bg' style='background:var(--sand)'>"
+                f"<div class='driver-bar-fill' style='width:{pct}%;"
+                f"background:linear-gradient(90deg,#b91c1c,#ef4444)'></div></div>"
+                f"<span class='driver-val' style='color:#b91c1c;font-weight:600'>{val}</span>"
+                f"</div>"
+            )
+        st.markdown(
+            f"<div class='insight-section'>"
+            f"<div class='insight-header drag-header'>"
+            f"<span class='insight-icon'>📉</span><span>Opportunity Gaps</span></div>"
+            f"<div class='insight-body'>{rows_html}</div></div>",
+            unsafe_allow_html=True,
+        )
+
+    if wf or wa:
+        upside_badge = f"<span class='upside-badge'>+{wu} pts</span>" if wu else ""
+        st.markdown(
+            f"<div class='insight-section'>"
+            f"<div class='insight-header whatif-header'>"
+            f"<span class='insight-icon'>💡</span>"
+            f"<span>Best What-If Action {upside_badge}</span></div>"
+            f"<div class='insight-body'>"
+            f"<div class='whatif-feature'>{wf}</div>"
+            f"<div class='whatif-advice'>{wa}.</div>"
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
 
 
 def build_results_csv() -> str:
@@ -575,16 +717,23 @@ def build_results_csv() -> str:
         parts     = key.rsplit("_", 1)
         fid       = parts[0]
         model_lbl = "_".join(parts[1:]) if len(parts) > 1 else "—"
-        feats     = data.get("features", [])
+        parsed = parse_reasoning(data.get("reasoning", ""))
+        pos    = parsed.get("positives", [])
+        drags  = parsed.get("drags", [])
         rows.append({
-            "farmer_id": fid,
-            "model":     model_lbl,
-            "score":     data.get("score", ""),
-            "band":      data.get("band", ""),
-            "feature_1": feats[0] if len(feats) > 0 else "",
-            "feature_2": feats[1] if len(feats) > 1 else "",
-            "feature_3": feats[2] if len(feats) > 2 else "",
-            "reasoning": data.get("reasoning", ""),
+            "farmer_id":      fid,
+            "model":          model_lbl,
+            "score":          data.get("score", ""),
+            "band":           data.get("band", ""),
+            "top_positive_1": pos[0]["label"] if len(pos) > 0 else "",
+            "top_positive_2": pos[1]["label"] if len(pos) > 1 else "",
+            "top_positive_3": pos[2]["label"] if len(pos) > 2 else "",
+            "top_drag_1":     drags[0]["label"] if len(drags) > 0 else "",
+            "top_drag_2":     drags[1]["label"] if len(drags) > 1 else "",
+            "whatif_feature": parsed.get("whatif_feature", ""),
+            "whatif_advice":  parsed.get("whatif_advice", ""),
+            "whatif_upside":  parsed.get("whatif_upside", ""),
+            "full_reasoning": data.get("reasoning", ""),
         })
     if not rows:
         return ""
@@ -601,9 +750,25 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     st.markdown("---")
-    st.markdown("<p style='font-size:0.7rem; text-transform:uppercase; letter-spacing:0.1em; color:#3db870; margin-bottom:0.5rem'>API Configuration</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:0.7rem; text-transform:uppercase; letter-spacing:0.1em; color:#3db870; margin-bottom:0.5rem'>API Endpoint</p>", unsafe_allow_html=True)
     base_url = st.text_input("Base URL", value=DEFAULT_BASE_URL, label_visibility="collapsed",
-                             placeholder="http://localhost:8000")
+                             placeholder="https://grow4me.onrender.com")
+
+    # Live health check
+    try:
+        _h = requests.get(base_url.rstrip("/") + "/health", timeout=5)
+        if _h.status_code == 200:
+            st.markdown("<span style='color:#6ed49a; font-size:0.78rem'>● API online</span>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<span style='color:#f59e0b; font-size:0.78rem'>⚠ API responded {_h.status_code}</span>", unsafe_allow_html=True)
+    except Exception:
+        st.markdown("<span style='color:#f87171; font-size:0.78rem'>○ API unreachable</span>", unsafe_allow_html=True)
+
+    st.markdown(
+        f"<a href='{base_url.rstrip("/")}/docs' target='_blank' "
+        "style='font-size:0.72rem; color:#3db870; text-decoration:none;'>📄 View API docs ↗</a>",
+        unsafe_allow_html=True,
+    )
 
     st.markdown("---")
     st.markdown("<p style='font-size:0.7rem; text-transform:uppercase; letter-spacing:0.1em; color:#3db870; margin-bottom:0.5rem'>Scoring Model</p>", unsafe_allow_html=True)
@@ -613,7 +778,8 @@ with st.sidebar:
     st.markdown("<p style='font-size:0.7rem; text-transform:uppercase; letter-spacing:0.1em; color:#3db870; margin-bottom:0.5rem'>About</p>", unsafe_allow_html=True)
     st.markdown("""
     <div style='font-size: 0.78rem; color: #a8f0c6; line-height: 1.6'>
-    Upload a farmer CSV, cycle through farmers, and get AI-powered credit scores from your scoring API.
+    Powered by <strong style='color:#6ed49a'>grow4me.onrender.com</strong>.<br>
+    Upload a farmer CSV, cycle through records, and get dual-model credit scores instantly.
     </div>
     """, unsafe_allow_html=True)
 
@@ -719,10 +885,15 @@ if st.session_state.farmers:
         result_key = f"{farmer_id}_{model_choice}"
         cached     = st.session_state.results.get(result_key)
 
+        st.markdown(
+            "<p style='font-size:0.75rem; color:var(--muted); margin-bottom:0.5rem'>"
+            "⚡ Hosted on Render — first request may take ~30 s to wake the server.</p>",
+            unsafe_allow_html=True,
+        )
         if st.button("🚀 Get Credit Score", use_container_width=True):
             payload  = build_payload(farmer)
             endpoint = ENDPOINTS[model_choice]
-            with st.spinner("Calling scoring API…"):
+            with st.spinner("Scoring… (cold-start may take ~30 s)"):
                 raw = call_api(base_url, endpoint, payload)
 
             if raw:
@@ -737,14 +908,12 @@ if st.session_state.farmers:
                     "score":     score,
                     "band":      band,
                     "reasoning": reasoning,
-                    "features":  features,
                 }
                 st.rerun()
 
         if cached:
             score     = cached["score"]
             band      = cached["band"]
-            features  = cached["features"]
             reasoning = cached["reasoning"]
 
             color = score_color(score)
@@ -757,25 +926,7 @@ if st.session_state.farmers:
             </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("<p style='font-size:0.82rem; font-weight:600; color:var(--green-800); margin:0.5rem 0 0.7rem'>Top Contributing Factors</p>", unsafe_allow_html=True)
-            for i, feat in enumerate(features[:3]):
-                bar_pct = max(30, 100 - i * 20)
-                st.markdown(f"""
-                <div class='driver-row'>
-                    <span class='driver-label'>#{i+1} {feat[:30]}</span>
-                    <div class='driver-bar-bg'>
-                        <div class='driver-bar-fill' style='width:{bar_pct}%'></div>
-                    </div>
-                    <span class='driver-val'>{'High' if i==0 else 'Med' if i==1 else 'Low'}</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-            st.markdown(f"""
-            <div class='reasoning-box'>
-                <strong>Model Reasoning</strong><br>
-                {reasoning}
-            </div>
-            """, unsafe_allow_html=True)
+            render_reasoning(parse_reasoning(reasoning))
 
         else:
             st.markdown("""
