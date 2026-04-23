@@ -158,7 +158,7 @@ def create_farmer_form(default_farmer=None, form_key="farmer_form"):
             region = st.text_input("Region", value=default_farmer.get("region", "") if default_farmer else "")
             drought_flood_index = st.number_input("Drought Flood Index", value=float(default_farmer.get("drought_flood_index", 0)) if default_farmer else 0.0, step=0.1)
             savings_ghs = st.number_input("Savings (GHS)", value=float(default_farmer.get("savings_ghs", 0)) if default_farmer else 0.0, step=0.01)
-            payment_frequency = st.text_input("Payment Frequency", value=default_farmer.get("payment_frequency", "") if default_farmer else "")
+            payment_frequency = st.number_input("Payment Frequency", value=int(default_farmer.get("payment_frequency", 0)) if default_farmer and str(default_farmer.get("payment_frequency", 0)).isdigit() else 0, step=1)
             crop_types = st.text_input("Crop Types (comma-separated)", value=default_farmer.get("crop_types", "") if default_farmer else "")
             is_association_member = st.checkbox("Is Association Member", value=bool(default_farmer.get("is_association_member", False)) if default_farmer else False)
             has_motorbike = st.checkbox("Has Motorbike", value=bool(default_farmer.get("has_motorbike", False)) if default_farmer else False)
@@ -168,15 +168,15 @@ def create_farmer_form(default_farmer=None, form_key="farmer_form"):
         
         with col2:
             yield_data = st.text_input("Yield Data (comma-separated)", value=default_farmer.get("yield_data", "") if default_farmer else "")
-            endorsements = st.text_input("Endorsements", value=default_farmer.get("endorsements", "") if default_farmer else "")
+            endorsements = st.number_input("Endorsements", value=int(default_farmer.get("endorsements", 0)) if default_farmer and str(default_farmer.get("endorsements", 0)).isdigit() else 0, step=1)
             irrigation_type = st.text_input("Irrigation Type", value=default_farmer.get("irrigation_type", "") if default_farmer else "")
-            irrigation_scheme = st.text_input("Irrigation Scheme", value=default_farmer.get("irrigation_scheme", "") if default_farmer else "")
+            irrigation_scheme = st.checkbox("Irrigation Scheme", value=bool(default_farmer.get("irrigation_scheme", False)) if default_farmer else False)
             market_access_index = st.number_input("Market Access Index", value=float(default_farmer.get("market_access_index", 0)) if default_farmer else 0.0, step=0.1)
-            training_sessions = st.number_input("Training Sessions", value=int(default_farmer.get("training_sessions", 0)) if default_farmer else 0)
+            training_sessions = st.number_input("Training Sessions", value=int(default_farmer.get("training_sessions", 0)) if default_farmer and str(default_farmer.get("training_sessions", 0)).isdigit() else 0, step=1)
             livestock_value_ghs = st.number_input("Livestock Value (GHS)", value=float(default_farmer.get("livestock_value_ghs", 0)) if default_farmer else 0.0, step=0.01)
             alternative_income_ghs = st.number_input("Alternative Income (GHS)", value=float(default_farmer.get("alternative_income_ghs", 0)) if default_farmer else 0.0, step=0.01)
             insurance_type = st.text_input("Insurance Type", value=default_farmer.get("insurance_type", "") if default_farmer else "")
-            insurance_subscription = st.text_input("Insurance Subscription", value=default_farmer.get("insurance_subscription", "") if default_farmer else "")
+            insurance_subscription = st.checkbox("Insurance Subscription", value=bool(default_farmer.get("insurance_subscription", False)) if default_farmer else False)
             digital_score = st.number_input("Digital Score", value=float(default_farmer.get("digital_score", 0)) if default_farmer else 0.0, step=0.1)
             soil_health_index = st.number_input("Soil Health Index", value=float(default_farmer.get("soil_health_index", 0)) if default_farmer else 0.0, step=0.1)
             farmer_budget_ghs = st.number_input("Farmer Budget (GHS)", value=float(default_farmer.get("farmer_budget_ghs", 0)) if default_farmer else 0.0, step=0.01)
@@ -415,11 +415,7 @@ if uploaded:
         st.error(f"Could not parse CSV: {e}")
 st.markdown("</div>", unsafe_allow_html=True)
 
-if not st.session_state.farmers:
-    st.markdown("<div style='text-align:center;padding:4rem 2rem;color:var(--muted)'><p style='font-size:3rem;margin:0'>🌾</p><p style='font-family:DM Serif Display,serif;font-size:1.4rem;color:var(--green-700);margin:0.5rem 0'>Upload a CSV to get started</p><p style='font-size:0.88rem'>Upload your <code>farmer_data.csv</code> above to begin scoring farmers.</p></div>", unsafe_allow_html=True)
-    st.stop()
-
-farmers      = st.session_state.farmers
+farmers      = st.session_state.farmers if st.session_state.farmers else []
 total        = len(farmers)
 results      = st.session_state.results
 
@@ -489,7 +485,17 @@ with tab_batch:
     
     if batch_file and st.button("🚀 Process Batch", use_container_width=True):
         with st.spinner("Processing batch… (may take several minutes)"):
-            raw = call_batch_api(base_url, batch_file)
+            import io
+            batch_file.seek(0)
+            try:
+                parsed_farmers = load_csv(batch_file)
+                clean_farmers = [build_payload(f) for f in parsed_farmers]
+                clean_csv_str = pd.DataFrame(clean_farmers).to_csv(index=False)
+                clean_file_obj = io.BytesIO(clean_csv_str.encode('utf-8'))
+                raw = call_batch_api(base_url, clean_file_obj)
+            except Exception as e:
+                st.error(f"Failed to pre-process CSV: {e}")
+                raw = None
         
         if raw:
             # Assuming the response is a list of results or dict with farmer_id keys
