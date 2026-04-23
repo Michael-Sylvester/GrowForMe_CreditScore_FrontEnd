@@ -323,7 +323,7 @@ def render_reasoning(parsed):
             unsafe_allow_html=True,
         )
 
-# ─── Page Navigation Callbacks ────────────────────────────────────────────────
+rmer # ─── Page Navigation Callbacks ────────────────────────────────────────────────
 def next_farmer():
     st.session_state.page_idx += 1
 
