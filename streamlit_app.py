@@ -197,7 +197,13 @@ def render_reasoning(parsed):
     wu   = parsed.get("whatif_upside", "")
     raw  = parsed.get("raw", "")
     if not pos and not drags and not wf:
-        st.markdown(f"<div class='reasoning-box'><strong>Model Reasoning</strong><br>{raw}</div>", unsafe_allow_html=True)
+        # Split raw reasoning on semi-colons and display as bullet list
+        items = [item.strip() for item in raw.split(';') if item.strip()]
+        if len(items) > 1:
+            items_html = "".join(f"<div style='margin-bottom: 0.5rem;'>• {item}</div>" for item in items)
+            st.markdown(f"<div class='reasoning-box'><strong>Model Reasoning</strong><br>{items_html}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='reasoning-box'><strong>Model Reasoning</strong><br>{raw}</div>", unsafe_allow_html=True)
         return
     if pos:
         items_html = ""
