@@ -138,11 +138,11 @@ def load_csv(file_obj):
 def build_payload(farmer):
     API_FIELDS = [
         "farmer_id","farmer_name","gender","region","drought_flood_index","savings_ghs",
-        "payment_frequency","crop_types","is_association_member","has_motorbike","acres",
+        "payment_frequency","farmer_budget_ghs","crop_types","is_association_member","has_motorbike","acres",
         "satellite_verified","repayment_rate","yield_data","endorsements","irrigation_type",
         "irrigation_scheme","market_access_index","training_sessions","livestock_value_ghs",
         "alternative_income_ghs","insurance_type","insurance_subscription","digital_score",
-        "soil_health_index","farmer_budget_ghs",
+        "soil_health_index"
     ]
     return {k: farmer[k] for k in API_FIELDS if k in farmer}
 
@@ -517,13 +517,12 @@ with tab_batch:
             if st.button("Process Batch", use_container_width=True):
                 with st.spinner("Processing batch… (may take several minutes)"):
                     import io
-                    import csv
                     try:
                         clean_farmers = [build_payload(f) for f in st.session_state.farmers]
                         for f in clean_farmers:
                             if "yield_data" in f:
                                 f["yield_data"] = str(f["yield_data"])
-                        clean_csv_str = pd.DataFrame(clean_farmers).to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC)
+                        clean_csv_str = pd.DataFrame(clean_farmers).to_csv(index=False)
                         clean_file_obj = io.BytesIO(clean_csv_str.encode('utf-8'))
                         raw = call_batch_api(base_url, clean_file_obj)
                     except Exception as e:
