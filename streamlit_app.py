@@ -146,6 +146,75 @@ def build_payload(farmer):
     ]
     return {k: farmer[k] for k in API_FIELDS if k in farmer}
 
+def create_farmer_form(default_farmer=None, form_key="farmer_form"):
+    """Create a form for farmer data input, pre-filled with default_farmer if provided."""
+    with st.form(form_key):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            farmer_id = st.text_input("Farmer ID", value=str(default_farmer.get("farmer_id", "")) if default_farmer else "")
+            farmer_name = st.text_input("Farmer Name", value=default_farmer.get("farmer_name", "") if default_farmer else "")
+            gender = st.selectbox("Gender", ["Male", "Female", "Other"], index=["Male", "Female", "Other"].index(default_farmer.get("gender", "Male")) if default_farmer and default_farmer.get("gender") in ["Male", "Female", "Other"] else 0)
+            region = st.text_input("Region", value=default_farmer.get("region", "") if default_farmer else "")
+            drought_flood_index = st.number_input("Drought Flood Index", value=float(default_farmer.get("drought_flood_index", 0)) if default_farmer else 0.0, step=0.1)
+            savings_ghs = st.number_input("Savings (GHS)", value=float(default_farmer.get("savings_ghs", 0)) if default_farmer else 0.0, step=0.01)
+            payment_frequency = st.text_input("Payment Frequency", value=default_farmer.get("payment_frequency", "") if default_farmer else "")
+            crop_types = st.text_input("Crop Types (comma-separated)", value=default_farmer.get("crop_types", "") if default_farmer else "")
+            is_association_member = st.checkbox("Is Association Member", value=bool(default_farmer.get("is_association_member", False)) if default_farmer else False)
+            has_motorbike = st.checkbox("Has Motorbike", value=bool(default_farmer.get("has_motorbike", False)) if default_farmer else False)
+            acres = st.number_input("Acres", value=float(default_farmer.get("acres", 0)) if default_farmer else 0.0, step=0.1)
+            satellite_verified = st.checkbox("Satellite Verified", value=bool(default_farmer.get("satellite_verified", False)) if default_farmer else False)
+            repayment_rate = st.number_input("Repayment Rate (%)", value=float(default_farmer.get("repayment_rate", 0)) if default_farmer else 0.0, step=0.1)
+        
+        with col2:
+            yield_data = st.text_input("Yield Data (comma-separated)", value=default_farmer.get("yield_data", "") if default_farmer else "")
+            endorsements = st.text_input("Endorsements", value=default_farmer.get("endorsements", "") if default_farmer else "")
+            irrigation_type = st.text_input("Irrigation Type", value=default_farmer.get("irrigation_type", "") if default_farmer else "")
+            irrigation_scheme = st.text_input("Irrigation Scheme", value=default_farmer.get("irrigation_scheme", "") if default_farmer else "")
+            market_access_index = st.number_input("Market Access Index", value=float(default_farmer.get("market_access_index", 0)) if default_farmer else 0.0, step=0.1)
+            training_sessions = st.number_input("Training Sessions", value=int(default_farmer.get("training_sessions", 0)) if default_farmer else 0)
+            livestock_value_ghs = st.number_input("Livestock Value (GHS)", value=float(default_farmer.get("livestock_value_ghs", 0)) if default_farmer else 0.0, step=0.01)
+            alternative_income_ghs = st.number_input("Alternative Income (GHS)", value=float(default_farmer.get("alternative_income_ghs", 0)) if default_farmer else 0.0, step=0.01)
+            insurance_type = st.text_input("Insurance Type", value=default_farmer.get("insurance_type", "") if default_farmer else "")
+            insurance_subscription = st.text_input("Insurance Subscription", value=default_farmer.get("insurance_subscription", "") if default_farmer else "")
+            digital_score = st.number_input("Digital Score", value=float(default_farmer.get("digital_score", 0)) if default_farmer else 0.0, step=0.1)
+            soil_health_index = st.number_input("Soil Health Index", value=float(default_farmer.get("soil_health_index", 0)) if default_farmer else 0.0, step=0.1)
+            farmer_budget_ghs = st.number_input("Farmer Budget (GHS)", value=float(default_farmer.get("farmer_budget_ghs", 0)) if default_farmer else 0.0, step=0.01)
+        
+        submitted = st.form_submit_button("🚀 Get Credit Score", use_container_width=True)
+        
+        if submitted:
+            farmer_data = {
+                "farmer_id": farmer_id,
+                "farmer_name": farmer_name,
+                "gender": gender,
+                "region": region,
+                "drought_flood_index": drought_flood_index,
+                "savings_ghs": savings_ghs,
+                "payment_frequency": payment_frequency,
+                "crop_types": crop_types,
+                "is_association_member": is_association_member,
+                "has_motorbike": has_motorbike,
+                "acres": acres,
+                "satellite_verified": satellite_verified,
+                "repayment_rate": repayment_rate,
+                "yield_data": yield_data,
+                "endorsements": endorsements,
+                "irrigation_type": irrigation_type,
+                "irrigation_scheme": irrigation_scheme,
+                "market_access_index": market_access_index,
+                "training_sessions": training_sessions,
+                "livestock_value_ghs": livestock_value_ghs,
+                "alternative_income_ghs": alternative_income_ghs,
+                "insurance_type": insurance_type,
+                "insurance_subscription": insurance_subscription,
+                "digital_score": digital_score,
+                "soil_health_index": soil_health_index,
+                "farmer_budget_ghs": farmer_budget_ghs,
+            }
+            return farmer_data
+    return None
+
 # ─── API Call ─────────────────────────────────────────────────────────────────
 def call_api(base_url, endpoint, payload):
     url = base_url.rstrip("/") + endpoint
@@ -157,6 +226,23 @@ def call_api(base_url, endpoint, payload):
         st.error(f"Cannot connect to **{url}**. Render may be waking — wait ~30 s and retry.")
     except requests.exceptions.Timeout:
         st.error("Request timed out (60 s). Render may be starting up. Please retry.")
+    except requests.exceptions.HTTPError as e:
+        st.error(f"API error {e.response.status_code}: {e.response.text}")
+    except Exception as e:
+        st.error(f"Unexpected error: {e}")
+    return None
+
+def call_batch_api(base_url, file_obj):
+    url = base_url.rstrip("/") + "/score/batch/rule-based/csv"
+    try:
+        files = {'file': ('farmer_data.csv', file_obj, 'text/csv')}
+        resp = requests.post(url, files=files, timeout=120)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.ConnectionError:
+        st.error(f"Cannot connect to **{url}**. Render may be waking — wait ~30 s and retry.")
+    except requests.exceptions.Timeout:
+        st.error("Request timed out (120 s). Render may be starting up. Please retry.")
     except requests.exceptions.HTTPError as e:
         st.error(f"API error {e.response.status_code}: {e.response.text}")
     except Exception as e:
@@ -303,9 +389,6 @@ with st.sidebar:
     st.markdown(f"<span style='color:{color_ind};font-size:0.78rem'>{indicator}</span>", unsafe_allow_html=True)
     st.markdown(f"<a href='{base_url.rstrip('/')}/docs' target='_blank' style='font-size:0.72rem;color:#3db870;text-decoration:none'>📄 View API docs ↗</a>", unsafe_allow_html=True)
     st.markdown("---")
-    st.markdown("<p style='font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:#3db870;margin-bottom:0.5rem'>Scoring Model</p>", unsafe_allow_html=True)
-    model_choice = st.radio("Model", list(ENDPOINTS.keys()), label_visibility="collapsed")
-    st.markdown("---")
     st.markdown("<div style='font-size:0.78rem;color:#a8f0c6;line-height:1.6'>Powered by <strong style='color:#6ed49a'>grow4me.onrender.com</strong>.<br>Upload CSV · score farmers · download results.</div>", unsafe_allow_html=True)
     st.markdown("---")
     if st.session_state.results:
@@ -339,123 +422,104 @@ if not st.session_state.farmers:
 farmers      = st.session_state.farmers
 total        = len(farmers)
 results      = st.session_state.results
-ep           = ENDPOINTS[model_choice]
-rk_model     = RESPONSE_KEY[model_choice]
 
 # ─── Tabs ─────────────────────────────────────────────────────────────────────
-tab_single, tab_bulk, tab_summary = st.tabs(["👤 Score One Farmer", "⚡ Score All Farmers", "📊 Results Summary"])
+tab_rule, tab_ml, tab_batch, tab_summary = st.tabs(["📋 Rule-based Scoring", "🤖 ML-based Scoring", "⚡ Batch Processing", "📊 Results Summary"])
 
-# ══════════ TAB 1 — Single farmer ════════════════════════════════════════════
-with tab_single:
-    idx    = st.session_state.page_idx
-    farmer = farmers[idx]
-    fid    = str(farmer.get("farmer_id", idx))
-    rk     = rkey(fid, model_choice)
-
-    st.markdown(f"<div class='farmer-nav'><span class='farmer-badge'>Farmer {idx+1} of {total}</span><span class='farmer-name'>{farmer.get('farmer_name','Unknown')}</span><span class='farmer-meta'>ID: {fid} &nbsp;|&nbsp; {farmer.get('region','—')}</span></div>", unsafe_allow_html=True)
-
-    c1, _, c3 = st.columns([1,6,1])
-    with c1:
-        st.button("◀ Prev", on_click=prev_farmer, disabled=(idx==0), use_container_width=True)
-    with c3:
-        st.button("Next ▶", on_click=next_farmer, disabled=(idx==total-1), use_container_width=True)
-
-    left, right = st.columns([1,1], gap="large")
-    with left:
-        st.markdown("<div class='card'><p class='card-title'>Farmer Profile</p>", unsafe_allow_html=True)
-        m1, m2 = st.columns(2)
-        m1.metric("Gender",         farmer.get("gender","—"))
-        m2.metric("Region",         farmer.get("region","—"))
-        m1.metric("Farm Size",      f"{farmer.get('acres','—')} ac")
-        m2.metric("Repayment Rate", f"{farmer.get('repayment_rate','—')}%")
-        m1.metric("Digital Score",  farmer.get("digital_score","—"))
-        m2.metric("Soil Health",    farmer.get("soil_health_index","—"))
-        crops = str(farmer.get("crop_types",""))
-        st.markdown("<p style='font-size:0.82rem;color:var(--muted);margin-top:0.5rem'>Crops</p>", unsafe_allow_html=True)
-        st.markdown("".join(f"<span class='info-chip'>{c.strip()}</span>" for c in crops.split(",") if c.strip()), unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        with st.expander("🔍 View API Payload"):
-            st.json(build_payload(farmer))
-
-    with right:
-        st.markdown(f"<div class='card'><p class='card-title'>② Score with <em>{model_choice}</em></p>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem'>⚡ Hosted on Render — first request may take ~30 s to wake the server.</p>", unsafe_allow_html=True)
-
-        if st.button("🚀 Get Credit Score", use_container_width=True, key="btn_single"):
-            with st.spinner("Scoring… (cold-start may take ~30 s)"):
-                raw = call_api(base_url, ep, build_payload(farmer))
-            if raw:
-                md = raw.get(rk_model, raw)
-                st.session_state.results[rk] = {"score": md.get("score",0), "band": md.get("band","—"), "reasoning": md.get("reasoning","")}
-
-        # Always read fresh from session_state (not the stale `results` copy)
-        cached = st.session_state.results.get(rk)
-        if cached:
-            sc = cached["score"]; bd = cached["band"]; rs = cached["reasoning"]
+# ══════════ TAB 1 — Rule-based Scoring ═══════════════════════════════════════
+with tab_rule:
+    st.markdown("<div class='card'><p class='card-title'>📋 Rule-based Scoring</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:0.88rem;color:var(--muted);margin-bottom:1rem'>Fill the form with farmer data (pre-filled from CSV if uploaded) and get a rule-based credit score.</p>", unsafe_allow_html=True)
+    
+    default_farmer = farmers[0] if farmers else None
+    farmer_data = create_farmer_form(default_farmer, "rule_form")
+    
+    if farmer_data:
+        fid = str(farmer_data["farmer_id"])
+        rk = rkey(fid, "Rule-based")
+        
+        with st.spinner("Scoring… (cold-start may take ~30 s)"):
+            raw = call_api(base_url, ENDPOINTS["Rule-based"], build_payload(farmer_data))
+        
+        if raw:
+            md = raw.get(RESPONSE_KEY["Rule-based"], raw)
+            st.session_state.results[rk] = {"score": md.get("score",0), "band": md.get("band","—"), "reasoning": md.get("reasoning","")}
+            
+            sc = md.get("score", 0); bd = md.get("band", "—"); rs = md.get("reasoning", "")
             st.markdown(f"<div class='score-ring-wrap'><p class='score-value' style='color:{score_color(sc)}'>{sc:.1f}</p><span class='score-band {band_class(bd)}'>{bd}</span><p style='font-size:0.75rem;color:var(--muted);margin-top:0.5rem'>out of 100</p></div>", unsafe_allow_html=True)
             render_reasoning(parse_reasoning(rs))
         else:
-            st.markdown("<div style='text-align:center;padding:2rem;color:var(--muted)'><p style='font-size:2.5rem;margin:0'>📊</p><p>Click <strong>Get Credit Score</strong> to run the model.</p></div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-# ══════════ TAB 2 — Bulk scoring ══════════════════════════════════════════════
-with tab_bulk:
-    st.markdown("<div class='card'><p class='card-title'>⚡ Score All Farmers</p>", unsafe_allow_html=True)
-    already = sum(1 for f in farmers if rkey(str(f.get("farmer_id","")), model_choice) in results)
-    st.markdown(f"<p style='font-size:0.88rem;color:var(--muted)'>{already} of {total} farmers already scored with <strong>{model_choice}</strong>.</p>", unsafe_allow_html=True)
-
-    col_a, col_b = st.columns([1,1])
-    with col_a: run_all = st.button("🚀 Score All Farmers", use_container_width=True, key="btn_bulk")
-    with col_b: rescore = st.checkbox("Re-score already scored farmers", value=False)
-
-    if run_all:
-        to_score = [f for f in farmers if rescore or rkey(str(f.get("farmer_id","")), model_choice) not in results]
-        if not to_score:
-            st.info("All farmers already scored. Check 'Re-score' to run again.")
-        else:
-            prog   = st.progress(0, text="Starting…")
-            status = st.empty()
-            errors = []
-            for i, f in enumerate(to_score):
-                fid  = str(f.get("farmer_id", i))
-                name = f.get("farmer_name", f"Farmer {fid}")
-                prog.progress(i / len(to_score), text=f"Scoring {name} ({i+1}/{len(to_score)})…")
-                status.markdown(f"<div style='background:var(--green-100);border-radius:8px;padding:0.75rem 1rem;font-size:0.85rem;color:var(--green-800)'>⏳ Calling API for <strong>{name}</strong> (ID: {fid})…</div>", unsafe_allow_html=True)
-                raw = call_api(base_url, ep, build_payload(f))
-                if raw:
-                    md = raw.get(rk_model, raw)
-                    st.session_state.results[rkey(fid, model_choice)] = {"score": md.get("score",0), "band": md.get("band","—"), "reasoning": md.get("reasoning","")}
-                else:
-                    errors.append(f"{name} (ID: {fid})")
-            prog.progress(1.0, text="Done!")
-            status.empty()
-            if errors:
-                st.warning(f"⚠ {len(to_score)-len(errors)}/{len(to_score)} scored. Failed: " + ", ".join(errors))
-            else:
-                st.success(f"✅ All {len(to_score)} farmers scored successfully!")
-
-    # Always read fresh from session_state for the display grid
-    scored = [f for f in farmers if rkey(str(f.get("farmer_id","")), model_choice) in st.session_state.results]
-    if scored:
-        st.markdown("<hr style='margin:1rem 0'>", unsafe_allow_html=True)
-        st.markdown(f"<p style='font-size:0.82rem;font-weight:600;color:var(--green-800)'>{len(scored)} Scored Farmers</p>", unsafe_allow_html=True)
-        cols = st.columns(3)
-        for i, f in enumerate(scored):
-            fid  = str(f.get("farmer_id",""))
-            data = st.session_state.results[rkey(fid, model_choice)]
-            sc   = data["score"]; bd = data["band"]
-            with cols[i % 3]:
-                st.markdown(
-                    f"<div style='background:var(--white);border-radius:10px;padding:1rem;margin-bottom:0.8rem;border:1px solid var(--sand)'>"
-                    f"<p style='font-family:DM Serif Display,serif;font-size:0.95rem;color:var(--ink);margin:0 0 0.2rem'>{f.get('farmer_name','—')}</p>"
-                    f"<p style='font-size:0.72rem;color:var(--muted);margin:0 0 0.6rem;font-family:DM Mono,monospace'>ID: {fid} · {f.get('region','—')}</p>"
-                    f"<span style='font-family:DM Serif Display,serif;font-size:1.8rem;color:{score_color(sc)}'>{sc:.1f}</span>"
-                    f"&nbsp;<span class='score-band {band_class(bd)}' style='font-size:0.65rem'>{bd}</span></div>",
-                    unsafe_allow_html=True,
-                )
+            st.error("Failed to get score. Please try again.")
+    
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ══════════ TAB 3 — Summary ═══════════════════════════════════════════════════
+# ══════════ TAB 2 — ML-based Scoring ══════════════════════════════════════════
+with tab_ml:
+    st.markdown("<div class='card'><p class='card-title'>🤖 ML-based Scoring</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:0.88rem;color:var(--muted);margin-bottom:1rem'>Fill the form with farmer data (pre-filled from CSV if uploaded) and get an ML-based credit score.</p>", unsafe_allow_html=True)
+    
+    default_farmer = farmers[0] if farmers else None
+    farmer_data = create_farmer_form(default_farmer, "ml_form")
+    
+    if farmer_data:
+        fid = str(farmer_data["farmer_id"])
+        rk = rkey(fid, "ML-based (XGBoost)")
+        
+        with st.spinner("Scoring… (cold-start may take ~30 s)"):
+            raw = call_api(base_url, ENDPOINTS["ML-based (XGBoost)"], build_payload(farmer_data))
+        
+        if raw:
+            md = raw.get(RESPONSE_KEY["ML-based (XGBoost)"], raw)
+            st.session_state.results[rk] = {"score": md.get("score",0), "band": md.get("band","—"), "reasoning": md.get("reasoning","")}
+            
+            sc = md.get("score", 0); bd = md.get("band", "—"); rs = md.get("reasoning", "")
+            st.markdown(f"<div class='score-ring-wrap'><p class='score-value' style='color:{score_color(sc)}'>{sc:.1f}</p><span class='score-band {band_class(bd)}'>{bd}</span><p style='font-size:0.75rem;color:var(--muted);margin-top:0.5rem'>out of 100</p></div>", unsafe_allow_html=True)
+            render_reasoning(parse_reasoning(rs))
+        else:
+            st.error("Failed to get score. Please try again.")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# ══════════ TAB 3 — Batch Processing ══════════════════════════════════════════
+with tab_batch:
+    st.markdown("<div class='card'><p class='card-title'>⚡ Batch Processing</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:0.88rem;color:var(--muted);margin-bottom:1rem'>Upload a CSV file to score all farmers using the rule-based model.</p>", unsafe_allow_html=True)
+    
+    batch_file = st.file_uploader("Upload farmer_data.csv for batch processing", type=["csv"], label_visibility="collapsed")
+    
+    if batch_file and st.button("🚀 Process Batch", use_container_width=True):
+        with st.spinner("Processing batch… (may take several minutes)"):
+            raw = call_batch_api(base_url, batch_file)
+        
+        if raw:
+            # Assuming the response is a list of results or dict with farmer_id keys
+            # Need to parse and store in session_state.results
+            if isinstance(raw, list):
+                for result in raw:
+                    fid = str(result.get("farmer_id", ""))
+                    if fid:
+                        rk = rkey(fid, "Rule-based")
+                        st.session_state.results[rk] = {
+                            "score": result.get("score", 0),
+                            "band": result.get("band", "—"),
+                            "reasoning": result.get("reasoning", "")
+                        }
+            elif isinstance(raw, dict):
+                for fid, result in raw.items():
+                    rk = rkey(str(fid), "Rule-based")
+                    st.session_state.results[rk] = {
+                        "score": result.get("score", 0),
+                        "band": result.get("band", "—"),
+                        "reasoning": result.get("reasoning", "")
+                    }
+            
+            st.success(f"✅ Batch processing completed! {len(st.session_state.results)} farmers scored.")
+        else:
+            st.error("Batch processing failed. Please try again.")
+    
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# ══════════ TAB 4 — Results Summary ═══════════════════════════════════════════
 with tab_summary:
     st.markdown("<div class='card'><p class='card-title'>📊 All Scored Farmers</p>", unsafe_allow_html=True)
     live_results = st.session_state.results
