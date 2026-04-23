@@ -200,44 +200,25 @@ def render_reasoning(parsed):
         st.markdown(f"<div class='reasoning-box'><strong>Model Reasoning</strong><br>{raw}</div>", unsafe_allow_html=True)
         return
     if pos:
-        mv = max((p["value"] or 0 for p in pos), default=1) or 1
-        rows_html = ""
+        items_html = ""
         for p in pos:
-            pct = int((p["value"] / mv) * 100) if p["value"] else 50
-            val = ("+%.2f" % p["value"]) if p["value"] is not None else ""
-            rows_html += (
-                "<div class='driver-row'>"
-                "<span class='driver-label'>" + p["label"] + "</span>"
-                "<div class='driver-bar-bg'><div class='driver-bar-fill' style='width:" + str(pct) + "%%;"
-                "background:linear-gradient(90deg,#1a8f4f,#3db870)'></div></div>"
-                "<span class='driver-val' style='color:#1a8f4f;font-weight:600'>" + val + "</span>"
-                "</div>"
-            )
+            val = (" (+%.2f)" % p["value"]) if p["value"] is not None else ""
+            items_html += "<div style='margin-bottom: 0.5rem; color: #1a8f4f;'>• " + p["label"] + val + "</div>"
         st.markdown(
             "<div class='insight-section'><div class='insight-header positive-header'>"
             "<span class='insight-icon'>📈</span><span>Top Positive Contributors</span></div>"
-            "<div class='insight-body'>" + rows_html + "</div></div>",
+            "<div class='insight-body'>" + items_html + "</div></div>",
             unsafe_allow_html=True,
         )
     if drags:
-        mv = max((d["value"] or 0 for d in drags), default=1) or 1
-        rows_html = ""
+        items_html = ""
         for d in drags:
-            pct = int((d["value"] / mv) * 100) if d["value"] else 50
-            val = ("−%.2f" % d["value"]) if d["value"] is not None else ""
-            rows_html += (
-                "<div class='driver-row'>"
-                "<span class='driver-label'>" + d["label"] + "</span>"
-                "<div class='driver-bar-bg' style='background:#fee2e2'>"
-                "<div class='driver-bar-fill' style='width:" + str(pct) + "%%;"
-                "background:linear-gradient(90deg,#b91c1c,#ef4444)'></div></div>"
-                "<span class='driver-val' style='color:#b91c1c;font-weight:600'>" + val + "</span>"
-                "</div>"
-            )
+            val = (" (−%.2f)" % d["value"]) if d["value"] is not None else ""
+            items_html += "<div style='margin-bottom: 0.5rem; color: #b91c1c;'>• " + d["label"] + val + "</div>"
         st.markdown(
             "<div class='insight-section'><div class='insight-header drag-header'>"
             "<span class='insight-icon'>📉</span><span>Opportunity Gaps</span></div>"
-            "<div class='insight-body'>" + rows_html + "</div></div>",
+            "<div class='insight-body'>" + items_html + "</div></div>",
             unsafe_allow_html=True,
         )
     if wf or wa:
@@ -363,9 +344,11 @@ with tab_single:
     with c1:
         if st.button("◀ Prev", disabled=(idx==0), use_container_width=True):
             st.session_state.page_idx -= 1
+            st.rerun()
     with c3:
         if st.button("Next ▶", disabled=(idx==total-1), use_container_width=True):
             st.session_state.page_idx += 1
+            st.rerun()
 
     left, right = st.columns([1,1], gap="large")
     with left:
