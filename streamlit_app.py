@@ -373,6 +373,8 @@ def build_results_csv(results):
 if "results"  not in st.session_state: st.session_state.results  = {}
 if "page_idx" not in st.session_state: st.session_state.page_idx = 0
 if "farmers"  not in st.session_state: st.session_state.farmers  = None
+if "batch_results" not in st.session_state: st.session_state.batch_results = None
+if "raw_csv" not in st.session_state: st.session_state.raw_csv = None
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -404,10 +406,14 @@ st.markdown("<div class='card'><p class='card-title'>① Upload Farmer Data</p>"
 uploaded = st.file_uploader("Drop your farmer_data.csv here", type=["csv"], label_visibility="collapsed")
 if uploaded:
     try:
+        uploaded.seek(0)
+        st.session_state.raw_csv = uploaded.read()
+        uploaded.seek(0)
         farmers = load_csv(uploaded)
         st.session_state.farmers  = farmers
         st.session_state.page_idx = 0
         st.session_state.results  = {}
+        st.session_state.batch_results = None
         st.success(f"✅ Loaded **{len(farmers)} farmer{'s' if len(farmers)!=1 else ''}** from `{uploaded.name}`")
         with st.expander("Preview parsed data"):
             st.dataframe(pd.DataFrame(farmers), use_container_width=True, height=180)
