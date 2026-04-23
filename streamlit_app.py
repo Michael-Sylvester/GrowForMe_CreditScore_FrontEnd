@@ -362,10 +362,10 @@ with tab_single:
     c1, _, c3 = st.columns([1,6,1])
     with c1:
         if st.button("◀ Prev", disabled=(idx==0), use_container_width=True):
-            st.session_state.page_idx -= 1; st.rerun()
+            st.session_state.page_idx -= 1
     with c3:
         if st.button("Next ▶", disabled=(idx==total-1), use_container_width=True):
-            st.session_state.page_idx += 1; st.rerun()
+            st.session_state.page_idx += 1
 
     left, right = st.columns([1,1], gap="large")
     with left:
