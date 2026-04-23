@@ -486,11 +486,16 @@ with tab_batch:
     if batch_file and st.button("🚀 Process Batch", use_container_width=True):
         with st.spinner("Processing batch… (may take several minutes)"):
             import io
+            import csv
             batch_file.seek(0)
             try:
                 parsed_farmers = load_csv(batch_file)
                 clean_farmers = [build_payload(f) for f in parsed_farmers]
-                clean_csv_str = pd.DataFrame(clean_farmers).to_csv(index=False)
+                # Enforce string type for yield_data so pandas doesn't write it as int
+                for f in clean_farmers:
+                    if "yield_data" in f:
+                        f["yield_data"] = str(f["yield_data"])
+                clean_csv_str = pd.DataFrame(clean_farmers).to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC)
                 clean_file_obj = io.BytesIO(clean_csv_str.encode('utf-8'))
                 raw = call_batch_api(base_url, clean_file_obj)
             except Exception as e:
@@ -500,7 +505,17 @@ with tab_batch:
         if raw:
             # Assuming the response is a list of results or dict with farmer_id keys
             # Need to parse and store in session_state.results
-            if isinstance(raw, list):
+            if isinstance(raw, dict) and "results" in raw:
+                for result in raw["results"]:
+                    fid = str(result.get("farmer_id", ""))
+                    if fid:
+                        rk = rkey(fid, "Rule-based")
+                        st.session_state.results[rk] = {
+                            "score": result.get("score", 0),
+                            "band": result.get("band", "—"),
+                            "reasoning": result.get("reasoning", "")
+                        }
+            elif isinstance(raw, list):
                 for result in raw:
                     fid = str(result.get("farmer_id", ""))
                     if fid:
@@ -512,12 +527,13 @@ with tab_batch:
                         }
             elif isinstance(raw, dict):
                 for fid, result in raw.items():
-                    rk = rkey(str(fid), "Rule-based")
-                    st.session_state.results[rk] = {
-                        "score": result.get("score", 0),
-                        "band": result.get("band", "—"),
-                        "reasoning": result.get("reasoning", "")
-                    }
+                    if isinstance(result, dict):
+                        rk = rkey(str(fid), "Rule-based")
+                        st.session_state.results[rk] = {
+                            "score": result.get("score", 0),
+                            "band": result.get("band", "—"),
+                            "reasoning": result.get("reasoning", "")
+                        }
             
             st.success(f"✅ Batch processing completed! {len(st.session_state.results)} farmers scored.")
         else:
