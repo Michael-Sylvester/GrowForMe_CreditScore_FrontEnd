@@ -495,22 +495,26 @@ with tab_ml:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════ TAB 3 — Batch Processing ══════════════════════════════════════════
+# ══════════ TAB 3 — Batch Processing ══════════════════════════════════════════
 with tab_batch:
     st.markdown("<div class='card'><p class='card-title'>⚡ Batch Processing</p>", unsafe_allow_html=True)
     st.markdown("<p style='font-size:0.88rem;color:var(--muted);margin-bottom:1rem'>Score all uploaded farmers using the rule-based model.</p>", unsafe_allow_html=True)
-    
-    if not st.session_state.get("batch_results") is not None:
+
+    if not st.session_state.farmers:
+        st.info("Please upload farmer data first in the section above.")
+
+    elif st.session_state.batch_results is not None:
+        # ── Results already in session — show them ──────────────────────────
         batch_results = st.session_state.batch_results
         st.success(f"✅ Batch processing completed! {len(batch_results)} farmer(s) scored.")
 
-        # Normalise ID types once into a lookup dict — avoids repeated linear scans
         name_lookup = {str(f.get("farmer_id", "")): f.get("farmer_name", "") for f in st.session_state.farmers}
 
         rows = []
         for result in batch_results:
-            fid = str(result.get("farmer_id", ""))
+            fid  = str(result.get("farmer_id", ""))
             name = name_lookup.get(fid, fid)
-            p = parse_reasoning(result.get("reasoning", ""))
+            p    = parse_reasoning(result.get("reasoning", ""))
             pos  = p.get("positives", [])
             drgs = p.get("drags", [])
             rows.append({
@@ -525,78 +529,77 @@ with tab_batch:
         if rows:
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         else:
-            st.warning("Results were received but no rows could be parsed. Raw sample:")
-            st.json(batch_results[:2])   # helpful for debugging API shape
+            st.warning("Results received but no rows could be parsed. Raw sample:")
+            st.json(batch_results[:2])
 
-            col_dl, col_rst = st.columns([3, 1])
-            with col_dl:
-                dl_csv = pd.DataFrame(rows).to_csv(index=False) if rows else ""
-                st.download_button("⬇ Download Batch Results", data=dl_csv,
-                                    file_name=f"batch_scores_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                                    mime="text/csv", use_container_width=True)
-            with col_rst:
-                if st.button("Reset Batch", use_container_width=True):
-                    st.session_state.batch_results = None
-                    st.rerun()
+        col_dl, col_rst = st.columns([3, 1])
+        with col_dl:
+            dl_csv = pd.DataFrame(rows).to_csv(index=False) if rows else ""
+            st.download_button("⬇ Download Batch Results", data=dl_csv,
+                               file_name=f"batch_scores_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                               mime="text/csv", use_container_width=True)
+        with col_rst:
+            if st.button("Reset Batch", use_container_width=True):
+                st.session_state.batch_results = None
+                st.rerun()
+
     else:
+        # ── No results yet — show preview + process button ──────────────────
         st.markdown("### Farmer Data Preview")
         st.dataframe(pd.DataFrame(st.session_state.farmers), use_container_width=True, height=250)
+
         if st.button("Process Batch", use_container_width=True):
+            import io
+            raw = None
             with st.spinner("Processing batch… (may take several minutes)"):
-                import io
                 try:
                     clean_farmers = [build_payload(f) for f in st.session_state.farmers]
                     for f in clean_farmers:
                         if "yield_data" in f:
                             f["yield_data"] = str(f["yield_data"])
-                    clean_csv_str = pd.DataFrame(clean_farmers).to_csv(index=False)
-                    clean_file_obj = io.BytesIO(clean_csv_str.encode('utf-8'))
+                    clean_csv_str  = pd.DataFrame(clean_farmers).to_csv(index=False)
+                    clean_file_obj = io.BytesIO(clean_csv_str.encode("utf-8"))
                     raw = call_batch_api(base_url, clean_file_obj)
                 except Exception as e:
                     st.error(f"Failed to pre-process CSV: {e}")
-                    raw = None
-            
-            # In the "Process Batch" button handler, replace the result extraction:
 
-                if raw:
-                    batch_res = []
-                    if isinstance(raw, list):
-                        batch_res = raw
-                    elif isinstance(raw, dict):
-                        if "results" in raw:
-                            val = raw["results"]
-                            if isinstance(val, list):
-                                batch_res = val
-                            elif isinstance(val, dict):
-                                for k, v in val.items():
-                                    if isinstance(v, dict):
-                                        v["farmer_id"] = v.get("farmer_id", k)
-                                        batch_res.append(v)
-                        else:
-                            # Flat dict keyed by farmer_id
-                            for k, v in raw.items():
+            if raw is not None:
+                batch_res = []
+                if isinstance(raw, list):
+                    batch_res = raw
+                elif isinstance(raw, dict):
+                    if "results" in raw:
+                        val = raw["results"]
+                        if isinstance(val, list):
+                            batch_res = val
+                        elif isinstance(val, dict):
+                            for k, v in val.items():
                                 if isinstance(v, dict):
                                     v["farmer_id"] = v.get("farmer_id", k)
                                     batch_res.append(v)
-                    
-                    if not batch_res:
-                        st.error("Could not parse batch results. Raw API response:")
-                        st.json(raw)
                     else:
-                        st.session_state.batch_results = batch_res
-                        for result in batch_res:
-                            fid = str(result.get("farmer_id", ""))
-                            if fid:
-                                rk = rkey(fid, "Rule-based")
-                                st.session_state.results[rk] = {
-                                    "score": result.get("score", 0),
-                                    "band": result.get("band", "—"),
-                                    "reasoning": result.get("reasoning", "")
-                                }
-                        st.rerun()
+                        for k, v in raw.items():
+                            if isinstance(v, dict):
+                                v["farmer_id"] = v.get("farmer_id", k)
+                                batch_res.append(v)
+
+                if not batch_res:
+                    st.error("Could not parse batch results. Raw API response:")
+                    st.json(raw)
                 else:
-                    st.error("Failed to get batch results. Please try again.")
-    
+                    for result in batch_res:
+                        fid = str(result.get("farmer_id", ""))
+                        if fid:
+                            st.session_state.results[rkey(fid, "Rule-based")] = {
+                                "score":     result.get("score", 0),
+                                "band":      result.get("band", "—"),
+                                "reasoning": result.get("reasoning", ""),
+                            }
+                    st.session_state.batch_results = batch_res
+                    st.rerun()
+            else:
+                st.error("Batch processing failed. Please try again.")
+
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ══════════ TAB 4 — Results Summary ═══════════════════════════════════════════
