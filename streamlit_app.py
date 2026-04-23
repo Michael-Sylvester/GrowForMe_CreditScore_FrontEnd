@@ -479,65 +479,68 @@ with tab_ml:
 # ══════════ TAB 3 — Batch Processing ══════════════════════════════════════════
 with tab_batch:
     st.markdown("<div class='card'><p class='card-title'>⚡ Batch Processing</p>", unsafe_allow_html=True)
-    st.markdown("<p style='font-size:0.88rem;color:var(--muted);margin-bottom:1rem'>Upload a CSV file to score all farmers using the rule-based model.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size:0.88rem;color:var(--muted);margin-bottom:1rem'>Score all uploaded farmers using the rule-based model.</p>", unsafe_allow_html=True)
     
-    batch_file = st.file_uploader("Upload farmer_data.csv for batch processing", type=["csv"], label_visibility="collapsed")
-    
-    if batch_file and st.button("🚀 Process Batch", use_container_width=True):
-        with st.spinner("Processing batch… (may take several minutes)"):
-            import io
-            import csv
-            batch_file.seek(0)
-            try:
-                parsed_farmers = load_csv(batch_file)
-                clean_farmers = [build_payload(f) for f in parsed_farmers]
-                # Enforce string type for yield_data so pandas doesn't write it as int
-                for f in clean_farmers:
-                    if "yield_data" in f:
-                        f["yield_data"] = str(f["yield_data"])
-                clean_csv_str = pd.DataFrame(clean_farmers).to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC)
-                clean_file_obj = io.BytesIO(clean_csv_str.encode('utf-8'))
-                raw = call_batch_api(base_url, clean_file_obj)
-            except Exception as e:
-                st.error(f"Failed to pre-process CSV: {e}")
-                raw = None
-        
-        if raw:
-            # Assuming the response is a list of results or dict with farmer_id keys
-            # Need to parse and store in session_state.results
-            if isinstance(raw, dict) and "results" in raw:
-                for result in raw["results"]:
-                    fid = str(result.get("farmer_id", ""))
-                    if fid:
-                        rk = rkey(fid, "Rule-based")
-                        st.session_state.results[rk] = {
-                            "score": result.get("score", 0),
-                            "band": result.get("band", "—"),
-                            "reasoning": result.get("reasoning", "")
-                        }
-            elif isinstance(raw, list):
-                for result in raw:
-                    fid = str(result.get("farmer_id", ""))
-                    if fid:
-                        rk = rkey(fid, "Rule-based")
-                        st.session_state.results[rk] = {
-                            "score": result.get("score", 0),
-                            "band": result.get("band", "—"),
-                            "reasoning": result.get("reasoning", "")
-                        }
-            elif isinstance(raw, dict):
-                for fid, result in raw.items():
-                    if isinstance(result, dict):
-                        rk = rkey(str(fid), "Rule-based")
-                        st.session_state.results[rk] = {
-                            "score": result.get("score", 0),
-                            "band": result.get("band", "—"),
-                            "reasoning": result.get("reasoning", "")
-                        }
-            
-            st.success(f"✅ Batch processing completed! {len(st.session_state.results)} farmers scored.")
+    if not st.session_state.farmers:
+        st.info("Please upload farmer data first in the section above.")
+    else:
+        if st.session_state.get("batch_results"):
+            st.success("✅ Batch processing completed!")
+            rows = []
+            for result in st.session_state.batch_results:
+                fid = str(result.get("farmer_id", ""))
+                name = next((f.get("farmer_name", fid) for f in st.session_state.farmers if str(f.get("farmer_id",""))==fid), fid)
+                p = parse_reasoning(result.get("reasoning",""))
+                pos = p.get("positives",[])
+                drgs = p.get("drags",[])
+                rows.append({
+                    "Farmer ID": fid,
+                    "Farmer Name": name,
+                    "Score": round(result.get("score", 0), 2),
+                    "Band": result.get("band", "—"),
+                    "Top Positive": pos[0]["label"] if pos else "—",
+                    "Top Gap": drgs[0]["label"] if drgs else "—",
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            if st.button("Reset Batch", use_container_width=True):
+                st.session_state.batch_results = None
+                st.rerun()
         else:
-            st.error("Batch processing failed. Please try again.")
+            st.markdown("### Farmer Data Preview")
+            st.dataframe(pd.DataFrame(st.session_state.farmers), use_container_width=True, height=250)
+            if st.button("Process Batch", use_container_width=True):
+                with st.spinner("Processing batch… (may take several minutes)"):
+                    import io
+                    # Use the raw bytes of the uploaded CSV to avoid coercion issues
+                    clean_file_obj = io.BytesIO(st.session_state.raw_csv)
+                    raw = call_batch_api(base_url, clean_file_obj)
+                
+                if raw:
+                    batch_res = []
+                    if isinstance(raw, dict) and "results" in raw:
+                        batch_res = raw["results"]
+                    elif isinstance(raw, list):
+                        batch_res = raw
+                    elif isinstance(raw, dict):
+                        for k, v in raw.items():
+                            if isinstance(v, dict):
+                                v["farmer_id"] = k
+                                batch_res.append(v)
+                    
+                    st.session_state.batch_results = batch_res
+                    
+                    for result in batch_res:
+                        fid = str(result.get("farmer_id", ""))
+                        if fid:
+                            rk = rkey(fid, "Rule-based")
+                            st.session_state.results[rk] = {
+                                "score": result.get("score", 0),
+                                "band": result.get("band", "—"),
+                                "reasoning": result.get("reasoning", "")
+                            }
+                    st.rerun()
+                else:
+                    st.error("Batch processing failed. Please try again.")
     
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -551,11 +554,12 @@ with tab_summary:
         rows = []
         for key, data in live_results.items():
             fid, mdl = key.split("||", 1)
+            name = next((f.get("farmer_name", fid) for f in farmers if str(f.get("farmer_id",""))==fid), fid)
             p    = parse_reasoning(data.get("reasoning",""))
             pos  = p.get("positives",[])
             drgs = p.get("drags",[])
             rows.append({
-                "Farmer ID":    fid, "Model": mdl,
+                "Farmer ID":    fid, "Farmer Name": name, "Model": mdl,
                 "Score":        round(data["score"],2), "Band": data["band"],
                 "Top Positive": pos[0]["label"]  if pos  else "—",
                 "Top Gap":      drgs[0]["label"] if drgs else "—",
