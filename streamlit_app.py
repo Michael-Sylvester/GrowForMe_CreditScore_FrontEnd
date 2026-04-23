@@ -902,7 +902,6 @@ if st.session_state.farmers:
                 score      = model_data.get("score", 0)
                 band       = model_data.get("band", "—")
                 reasoning  = model_data.get("reasoning", "")
-                features   = extract_top_features(reasoning)
 
                 st.session_state.results[result_key] = {
                     "score":     score,
