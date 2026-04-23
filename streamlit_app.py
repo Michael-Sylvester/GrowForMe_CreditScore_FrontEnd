@@ -85,17 +85,18 @@ def _parse_raw_line(line):
         nonlocal idx
         v = vals[idx]; idx += 1; return v.strip()
     r = {}
-    r["farmer_id"]            = take()
-    r["farmer_name"]          = take()
-    r["gender"]               = take()
-    r["region"]               = take()
-    r["drought_flood_index"]  = take()
-    r["savings_ghs"]          = take()
-    take()                                   # savings_usd – skip
-    r["payment_frequency"]    = take()
-    r["farmer_budget_ghs"]    = take()
+    r["farmer_id"]            = take()   # Farmer Id
+    r["farmer_name"]          = take()   # Farmer Name
+    r["gender"]               = take()   # Gender
+    r["region"]               = take()   # Region
+    r["drought_flood_index"]  = take()   # Drought Flood Index
+    r["savings_ghs"]          = take()   # Savings Ghs
+    take()                               # Savings Usd — skip
+    r["payment_frequency"]    = take()   # Payment Frequency
+    r["farmer_budget_ghs"]    = take()   # Farmer Budget Ghs
+    # Crop types: consume tokens until we hit a TRUE/FALSE (is_association_member)
     crops = []
-    while idx < len(vals) and vals[idx].strip() not in BOOL_VALS:
+    while idx < len(vals) and vals[idx].strip().upper() not in BOOL_VALS:
         crops.append(take())
     r["crop_types"]            = ",".join(crops)
     r["is_association_member"] = take()
@@ -103,20 +104,31 @@ def _parse_raw_line(line):
     r["acres"]                 = take()
     r["satellite_verified"]    = take()
     r["repayment_rate"]        = take()
-    n_yield = len(vals) - idx - 13
-    r["yield_data"]             = ",".join([take() for _ in range(max(n_yield, 1))])
+    # Yield data: consume until we hit endorsements (an integer before irrigation_type string)
+    # Strategy: consume until a non-float token that is also not TRUE/FALSE
+    yield_vals = []
+    while idx < len(vals):
+        token = vals[idx].strip()
+        try:
+            float(token)
+            yield_vals.append(take())
+        except ValueError:
+            break
+    r["yield_data"]             = ",".join(yield_vals)
     r["endorsements"]           = take()
     r["irrigation_type"]        = take()
     r["irrigation_scheme"]      = take()
     r["market_access_index"]    = take()
     r["training_sessions"]      = take()
-    r["livestock_value_ghs"]    = take()
-    r["alternative_income_ghs"] = take()
+    take()                               # Livestock Value Usd — skip (CSV uses USD)
+    take()                               # Alternative Income Usd — skip
+    r["livestock_value_ghs"]    = "0"   # not in CSV, default
+    r["alternative_income_ghs"] = "0"   # not in CSV, default
     r["insurance_type"]         = take()
     r["insurance_subscription"] = take()
     r["digital_score"]          = take()
     r["soil_health_index"]      = take()
-    take(); take()                           # credit_score, creditworthiness – skip
+    # skip Credit Score and Creditworthiness (last 2 cols)
     return r
 
 def _coerce(val):
@@ -544,32 +556,46 @@ with tab_batch:
                     st.error(f"Failed to pre-process CSV: {e}")
                     raw = None
             
-            if raw:
-                batch_res = []
-                if isinstance(raw, dict) and "results" in raw:
-                    batch_res = raw["results"]
-                elif isinstance(raw, list):
-                    batch_res = raw
-                elif isinstance(raw, dict):
-                    for k, v in raw.items():
-                        if isinstance(v, dict):
-                            v["farmer_id"] = k
-                            batch_res.append(v)
-                
-                st.session_state.batch_results = batch_res
-                
-                for result in batch_res:
-                    fid = str(result.get("farmer_id", ""))
-                    if fid:
-                        rk = rkey(fid, "Rule-based")
-                        st.session_state.results[rk] = {
-                            "score": result.get("score", 0),
-                            "band": result.get("band", "—"),
-                            "reasoning": result.get("reasoning", "")
-                        }
-                st.rerun()
-            else:
-                st.error("Batch processing failed. Please try again.")
+            # In the "Process Batch" button handler, replace the result extraction:
+
+                if raw:
+                    batch_res = []
+                    if isinstance(raw, list):
+                        batch_res = raw
+                    elif isinstance(raw, dict):
+                        if "results" in raw:
+                            val = raw["results"]
+                            if isinstance(val, list):
+                                batch_res = val
+                            elif isinstance(val, dict):
+                                for k, v in val.items():
+                                    if isinstance(v, dict):
+                                        v["farmer_id"] = v.get("farmer_id", k)
+                                        batch_res.append(v)
+                        else:
+                            # Flat dict keyed by farmer_id
+                            for k, v in raw.items():
+                                if isinstance(v, dict):
+                                    v["farmer_id"] = v.get("farmer_id", k)
+                                    batch_res.append(v)
+                    
+                    if not batch_res:
+                        st.error("Could not parse batch results. Raw API response:")
+                        st.json(raw)
+                    else:
+                        st.session_state.batch_results = batch_res
+                        for result in batch_res:
+                            fid = str(result.get("farmer_id", ""))
+                            if fid:
+                                rk = rkey(fid, "Rule-based")
+                                st.session_state.results[rk] = {
+                                    "score": result.get("score", 0),
+                                    "band": result.get("band", "—"),
+                                    "reasoning": result.get("reasoning", "")
+                                }
+                        st.rerun()
+                else:
+                    st.error("Failed to get batch results. Please try again.")
     
     st.markdown("</div>", unsafe_allow_html=True)
 
