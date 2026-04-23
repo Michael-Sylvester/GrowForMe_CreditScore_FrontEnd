@@ -166,24 +166,24 @@ def call_api(base_url, endpoint, payload):
 # ─── Reasoning Parser & Renderer ─────────────────────────────────────────────
 def parse_reasoning(text):
     r = {"positives":[],"drags":[],"whatif_feature":"","whatif_advice":"","whatif_upside":"","raw":text}
-    pos_m = _re.search(r"Top positive contributors:\s*(.+?)(?:\.\s*Biggest drags:|$)", text, _re.IGNORECASE)
+    pos_m = _re.search(r"(?:Top positive contributors|Positive factors|Strengths|Advantages):\s*(.+?)(?:\.\s*(?:Biggest drags|Opportunity gaps|Negative factors|Drawbacks|What-if|Recommendation|Suggested|Improvement):|$)", text, _re.IGNORECASE)
     if pos_m:
         for item in _re.split(r";\s*", pos_m.group(1)):
             item = item.strip().rstrip(".")
             m = _re.match(r"(.+?)\s*\(\+?([\d.]+)\)", item)
             r["positives"].append({"label": m.group(1).strip(), "value": float(m.group(2))} if m else {"label": item, "value": None})
-    drag_m = _re.search(r"Biggest drags:\s*(.+?)(?:\.\s*What-if:|$)", text, _re.IGNORECASE)
+    drag_m = _re.search(r"(?:Biggest drags|Opportunity gaps|Negative factors|Drawbacks):\s*(.+?)(?:\.\s*(?:What-if|Recommendation|Suggested|Improvement):|$)", text, _re.IGNORECASE)
     if drag_m:
         for item in _re.split(r";\s*", drag_m.group(1)):
             item = item.strip().rstrip(".")
             m = _re.match(r"(.+?)\s*\(-(?:opportunity\s*)?([\d.]+)\)", item)
             r["drags"].append({"label": m.group(1).strip(), "value": float(m.group(2))} if m else {"label": item, "value": None})
-    wi_m = _re.search(r"What-if:(.+)", text, _re.IGNORECASE | _re.DOTALL)
+    wi_m = _re.search(r"(?:What-if|Recommendation|Suggested action|Improvement suggestion|Best improvement):\s*(.+)", text, _re.IGNORECASE | _re.DOTALL)
     if wi_m:
         wi = wi_m.group(1).strip()
-        fm = _re.search(r"Best single what-if change:\s*(.+?)\s*->", wi, _re.IGNORECASE)
-        am = _re.search(r"->\s*(.+?)(?:\.\s*Estimated|$)", wi, _re.IGNORECASE)
-        um = _re.search(r"Estimated score upside:\s*\+?([\d.]+)", wi, _re.IGNORECASE)
+        fm = _re.search(r"(?:Best single what-if change|Best improvement|Recommended change|Key recommendation):\s*(.+?)\s*(?:->|would|could)", wi, _re.IGNORECASE)
+        am = _re.search(r"(?:->|would|could)\s*(.+?)(?:\.\s*(?:Estimated|Expected|Potential)|$)", wi, _re.IGNORECASE)
+        um = _re.search(r"(?:Estimated|Expected|Potential) (?:score )?upside:\s*\+?([\d.]+)", wi, _re.IGNORECASE)
         if fm: r["whatif_feature"] = fm.group(1).strip()
         if am: r["whatif_advice"]  = am.group(1).strip()
         if um: r["whatif_upside"]  = um.group(1)
