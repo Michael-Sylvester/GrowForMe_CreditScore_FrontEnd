@@ -426,7 +426,7 @@ total        = len(farmers)
 results      = st.session_state.results
 
 # ─── Tabs ─────────────────────────────────────────────────────────────────────
-tab_rule, tab_ml, tab_batch, tab_summary = st.tabs(["📋 Rule-based Scoring", "🤖 ML-based Scoring", "⚡ Batch Processing", "📊 Results Summary"])
+tab_rule, tab_ml, tab_batch, tab_summary = st.tabs(["Rule-based Scoring", "ML-based Scoring", "Batch Processing", "Results Summary"])
 
 # ══════════ TAB 1 — Rule-based Scoring ═══════════════════════════════════════
 with tab_rule:
@@ -517,9 +517,18 @@ with tab_batch:
             if st.button("Process Batch", use_container_width=True):
                 with st.spinner("Processing batch… (may take several minutes)"):
                     import io
-                    # Use the raw bytes of the uploaded CSV to avoid coercion issues
-                    clean_file_obj = io.BytesIO(st.session_state.raw_csv)
-                    raw = call_batch_api(base_url, clean_file_obj)
+                    import csv
+                    try:
+                        clean_farmers = [build_payload(f) for f in st.session_state.farmers]
+                        for f in clean_farmers:
+                            if "yield_data" in f:
+                                f["yield_data"] = str(f["yield_data"])
+                        clean_csv_str = pd.DataFrame(clean_farmers).to_csv(index=False, quoting=csv.QUOTE_NONNUMERIC)
+                        clean_file_obj = io.BytesIO(clean_csv_str.encode('utf-8'))
+                        raw = call_batch_api(base_url, clean_file_obj)
+                    except Exception as e:
+                        st.error(f"Failed to pre-process CSV: {e}")
+                        raw = None
                 
                 if raw:
                     batch_res = []
