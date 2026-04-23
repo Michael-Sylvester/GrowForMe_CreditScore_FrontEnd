@@ -394,9 +394,9 @@ with tab_single:
             if raw:
                 md = raw.get(rk_model, raw)
                 st.session_state.results[rk] = {"score": md.get("score",0), "band": md.get("band","—"), "reasoning": md.get("reasoning","")}
-                st.rerun()
 
-        cached = results.get(rk)
+        # Always read fresh from session_state (not the stale `results` copy)
+        cached = st.session_state.results.get(rk)
         if cached:
             sc = cached["score"]; bd = cached["band"]; rs = cached["reasoning"]
             st.markdown(f"<div class='score-ring-wrap'><p class='score-value' style='color:{score_color(sc)}'>{sc:.1f}</p><span class='score-band {band_class(bd)}'>{bd}</span><p style='font-size:0.75rem;color:var(--muted);margin-top:0.5rem'>out of 100</p></div>", unsafe_allow_html=True)
@@ -440,16 +440,16 @@ with tab_bulk:
                 st.warning(f"⚠ {len(to_score)-len(errors)}/{len(to_score)} scored. Failed: " + ", ".join(errors))
             else:
                 st.success(f"✅ All {len(to_score)} farmers scored successfully!")
-            st.rerun()
 
-    scored = [f for f in farmers if rkey(str(f.get("farmer_id","")), model_choice) in results]
+    # Always read fresh from session_state for the display grid
+    scored = [f for f in farmers if rkey(str(f.get("farmer_id","")), model_choice) in st.session_state.results]
     if scored:
         st.markdown("<hr style='margin:1rem 0'>", unsafe_allow_html=True)
         st.markdown(f"<p style='font-size:0.82rem;font-weight:600;color:var(--green-800)'>{len(scored)} Scored Farmers</p>", unsafe_allow_html=True)
         cols = st.columns(3)
         for i, f in enumerate(scored):
             fid  = str(f.get("farmer_id",""))
-            data = results[rkey(fid, model_choice)]
+            data = st.session_state.results[rkey(fid, model_choice)]
             sc   = data["score"]; bd = data["band"]
             with cols[i % 3]:
                 st.markdown(
@@ -465,11 +465,12 @@ with tab_bulk:
 # ══════════ TAB 3 — Summary ═══════════════════════════════════════════════════
 with tab_summary:
     st.markdown("<div class='card'><p class='card-title'>📊 All Scored Farmers</p>", unsafe_allow_html=True)
-    if not results:
+    live_results = st.session_state.results
+    if not live_results:
         st.info("No results yet. Score farmers in the other tabs first.")
     else:
         rows = []
-        for key, data in results.items():
+        for key, data in live_results.items():
             fid, mdl = key.split("||", 1)
             p    = parse_reasoning(data.get("reasoning",""))
             pos  = p.get("positives",[])
@@ -486,7 +487,7 @@ with tab_summary:
 
         st.markdown("<hr style='margin:1rem 0'>", unsafe_allow_html=True)
         st.markdown("<p style='font-size:0.88rem;font-weight:600;color:var(--green-800)'>Detailed Breakdown per Farmer</p>", unsafe_allow_html=True)
-        for key, data in results.items():
+        for key, data in live_results.items():
             fid, mdl = key.split("||", 1)
             name = next((f.get("farmer_name", fid) for f in farmers if str(f.get("farmer_id",""))==fid), fid)
             sc   = data["score"]; bd = data["band"]
@@ -495,6 +496,6 @@ with tab_summary:
                 render_reasoning(parse_reasoning(data["reasoning"]))
 
         st.markdown("<hr style='margin:1rem 0'>", unsafe_allow_html=True)
-        st.download_button("⬇ Download Results CSV", data=build_results_csv(results),
+        st.download_button("⬇ Download Results CSV", data=build_results_csv(live_results),
                            file_name=f"credit_scores_{datetime.now().strftime('%Y%m%d_%H%M')}.csv", mime="text/csv")
     st.markdown("</div>", unsafe_allow_html=True)
