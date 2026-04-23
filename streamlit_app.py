@@ -237,6 +237,14 @@ def render_reasoning(parsed):
             unsafe_allow_html=True,
         )
 
+# ─── Page Navigation Callbacks ────────────────────────────────────────────────
+def next_farmer():
+    st.session_state.page_idx += 1
+
+def prev_farmer():
+    st.session_state.page_idx -= 1
+
+
 # ─── Misc helpers ─────────────────────────────────────────────────────────────
 def band_class(band):
     b = (band or "").lower()
@@ -348,13 +356,9 @@ with tab_single:
 
     c1, _, c3 = st.columns([1,6,1])
     with c1:
-        if st.button("◀ Prev", disabled=(idx==0), use_container_width=True):
-            st.session_state.page_idx -= 1
-            st.rerun()
+        st.button("◀ Prev", on_click=prev_farmer, disabled=(idx==0), use_container_width=True)
     with c3:
-        if st.button("Next ▶", disabled=(idx==total-1), use_container_width=True):
-            st.session_state.page_idx += 1
-            st.rerun()
+        st.button("Next ▶", on_click=next_farmer, disabled=(idx==total-1), use_container_width=True)
 
     left, right = st.columns([1,1], gap="large")
     with left:
