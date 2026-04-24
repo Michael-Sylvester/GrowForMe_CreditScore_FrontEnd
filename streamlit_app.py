@@ -592,13 +592,22 @@ with tab_batch:
                         elif isinstance(val, dict):
                             for k, v in val.items():
                                 if isinstance(v, dict):
-                                    v["farmer_id"] = v.get("farmer_id", k)
+                                    v.setdefault("farmer_id", k)
                                     batch_res.append(v)
                     else:
-                        for k, v in raw.items():
-                            if isinstance(v, dict):
-                                v["farmer_id"] = v.get("farmer_id", k)
-                                batch_res.append(v)
+                        # Look for any value that is a list of results
+                        found_list = False
+                        for v in raw.values():
+                            if isinstance(v, list):
+                                batch_res = v
+                                found_list = True
+                                break
+                        # If no list found, assume it's a dict of dicts keyed by farmer_id
+                        if not found_list:
+                            for k, v in raw.items():
+                                if isinstance(v, dict):
+                                    v.setdefault("farmer_id", k)
+                                    batch_res.append(v)
 
                 if not batch_res:
                     st.error("Could not parse batch results. Raw API response:")
