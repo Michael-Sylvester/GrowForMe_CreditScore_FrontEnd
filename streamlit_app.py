@@ -512,18 +512,17 @@ with tab_batch:
             # Create a normalized list of dictionaries for robust display
             display_data = []
             for item in batch_results:
-                md = item.get(RESPONSE_KEY["Rule-based"], item)
                 display_data.append({
                     "farmer_id": item.get("farmer_id"),
-                    "score": md.get("score", 0),
-                    "band": md.get("band", "—"),
-                    "reasoning": md.get("reasoning", "")
+                    "score": item.get("score", 0),
+                    "band": item.get("band", "—"),
+                    "reasoning": item.get("reasoning", "")
                 })
             df_results = pd.DataFrame(display_data)
 
             # Create a lookup for farmer names from the original upload
-            name_lookup = {f.get("farmer_id"): f.get("farmer_name", "N/A") for f in st.session_state.farmers}
-            df_results['farmer_name'] = df_results['farmer_id'].map(name_lookup).fillna('N/A')
+            name_lookup = {str(f.get("farmer_id", "")): f.get("farmer_name", "N/A") for f in st.session_state.farmers}
+            df_results['farmer_name'] = df_results['farmer_id'].fillna("").astype(str).map(name_lookup).fillna('N/A')
 
             # Define and reorder columns for a clean display
             display_cols = ['farmer_id', 'farmer_name', 'score', 'band', 'reasoning']
@@ -600,15 +599,14 @@ with tab_batch:
                     # Success: we have a list of results (it might be empty, which is fine).
                     # Update the main results dictionary for the summary tab.
                     for result in batch_res:
-                        md = result.get(RESPONSE_KEY["Rule-based"], result)
                         fid = str(result.get("farmer_id", ""))
                         # The result object from the batch API has a farmer_id.
                         # We only add it to the main results dict if the ID is not empty.
                         if fid:
                             st.session_state.results[rkey(fid, "Rule-based")] = {
-                                "score":     md.get("score", 0),
-                                "band":      md.get("band", "—"),
-                                "reasoning": md.get("reasoning", ""),
+                                "score":     result.get("score", 0),
+                                "band":      result.get("band", "—"),
+                                "reasoning": result.get("reasoning", ""),
                             }
                     # Store the raw batch results in the session to update the UI, then trigger a refresh.
                     st.session_state.batch_results = batch_res
