@@ -581,46 +581,28 @@ with tab_batch:
                     st.error(f"Failed to process or send CSV: {e}")
 
             if raw is not None:
-                batch_res = []
-                if isinstance(raw, list):
-                    batch_res = raw
-                elif isinstance(raw, dict):
-                    if "results" in raw:
-                        val = raw["results"]
-                        if isinstance(val, list):
-                            batch_res = val
-                        elif isinstance(val, dict):
-                            for k, v in val.items():
-                                if isinstance(v, dict):
-                                    v.setdefault("farmer_id", k)
-                                    batch_res.append(v)
-                    else:
-                        # Look for any value that is a list of results
-                        found_list = False
-                        for v in raw.values():
-                            if isinstance(v, list):
-                                batch_res = v
-                                found_list = True
-                                break
-                        # If no list found, assume it's a dict of dicts keyed by farmer_id
-                        if not found_list:
-                            for k, v in raw.items():
-                                if isinstance(v, dict):
-                                    v.setdefault("farmer_id", k)
-                                    batch_res.append(v)
+                # The API schema is a dict: {"count": int, "results": [list_of_scores]}
+                # We extract the list from the "results" key.
+                batch_res = raw.get("results")
 
-                if not batch_res:
-                    st.error("Could not parse batch results. Raw API response:")
+                # Validate that we got a list. If not, show an error.
+                if not isinstance(batch_res, list):
+                    st.error("Could not parse batch results. The API response did not contain a valid 'results' list.")
                     st.json(raw)
                 else:
+                    # Success: we have a list of results (it might be empty, which is fine).
+                    # Update the main results dictionary for the summary tab.
                     for result in batch_res:
                         fid = str(result.get("farmer_id", ""))
+                        # The result object from the batch API has a farmer_id.
+                        # We only add it to the main results dict if the ID is not empty.
                         if fid:
                             st.session_state.results[rkey(fid, "Rule-based")] = {
                                 "score":     result.get("score", 0),
                                 "band":      result.get("band", "—"),
                                 "reasoning": result.get("reasoning", ""),
                             }
+                    # Store the raw batch results in the session to update the UI, then trigger a refresh.
                     st.session_state.batch_results = batch_res
                     st.rerun()
             else:
