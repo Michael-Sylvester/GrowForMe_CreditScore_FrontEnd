@@ -6,6 +6,8 @@ This service accepts one **raw farmer payload**, then:
 - internally preprocesses the same payload for **XGBoost**
 - returns XGBoost score with plain-text reasoning
 
+Link: https://grow4me.onrender.com/docs#/default/score_rule_based_batch_csv_score_batch_rule_based_csv_post
+
 ## Files
 
 - `scoring_api.py` - dual-model FastAPI service

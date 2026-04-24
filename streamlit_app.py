@@ -509,8 +509,17 @@ with tab_batch:
         st.success(f"✅ Batch processing completed! {len(batch_results)} farmer(s) scored.")
 
         if batch_results:
-            # Directly convert the API response list to a DataFrame for robust display
-            df_results = pd.DataFrame(batch_results)
+            # Create a normalized list of dictionaries for robust display
+            display_data = []
+            for item in batch_results:
+                md = item.get(RESPONSE_KEY["Rule-based"], item)
+                display_data.append({
+                    "farmer_id": item.get("farmer_id"),
+                    "score": md.get("score", 0),
+                    "band": md.get("band", "—"),
+                    "reasoning": md.get("reasoning", "")
+                })
+            df_results = pd.DataFrame(display_data)
 
             # Create a lookup for farmer names from the original upload
             name_lookup = {f.get("farmer_id"): f.get("farmer_name", "N/A") for f in st.session_state.farmers}
@@ -575,9 +584,13 @@ with tab_batch:
                     st.error(f"Failed to process or send CSV: {e}")
 
             if raw is not None:
-                # The API schema is a dict: {"count": int, "results": [list_of_scores]}
-                # We extract the list from the "results" key.
-                batch_res = raw.get("results")
+                # The API schema might be a dict {"results": [...]} or directly a list
+                if isinstance(raw, dict) and "results" in raw:
+                    batch_res = raw["results"]
+                elif isinstance(raw, list):
+                    batch_res = raw
+                else:
+                    batch_res = [raw] if isinstance(raw, dict) else []
 
                 # Validate that we got a list. If not, show an error.
                 if not isinstance(batch_res, list):
@@ -587,14 +600,15 @@ with tab_batch:
                     # Success: we have a list of results (it might be empty, which is fine).
                     # Update the main results dictionary for the summary tab.
                     for result in batch_res:
+                        md = result.get(RESPONSE_KEY["Rule-based"], result)
                         fid = str(result.get("farmer_id", ""))
                         # The result object from the batch API has a farmer_id.
                         # We only add it to the main results dict if the ID is not empty.
                         if fid:
                             st.session_state.results[rkey(fid, "Rule-based")] = {
-                                "score":     result.get("score", 0),
-                                "band":      result.get("band", "—"),
-                                "reasoning": result.get("reasoning", ""),
+                                "score":     md.get("score", 0),
+                                "band":      md.get("band", "—"),
+                                "reasoning": md.get("reasoning", ""),
                             }
                     # Store the raw batch results in the session to update the UI, then trigger a refresh.
                     st.session_state.batch_results = batch_res
