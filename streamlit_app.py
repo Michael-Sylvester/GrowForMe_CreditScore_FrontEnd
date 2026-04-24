@@ -20,8 +20,44 @@ st.markdown("""
     --green-900:#0d2b1a; --green-800:#133d24; --green-700:#1a5230;
     --green-600:#1f6b3c; --green-500:#2a8a4f; --green-400:#3db870;
     --green-300:#6ed49a; --green-200:#a8f0c6; --green-100:#d6fae8;
-    --cream:#0e1117; --sand:#2a2f3a; --bark:#cbd5e1;
-    --ink:#f8fafc; --muted:#94a3b8; --white:#1a1c24;
+
+    /* Light Mode Defaults */
+    --cream:#f7f4ee; --sand:#e8e2d5; --bark:#7a6a52;
+    --ink:#1a1a1a; --muted:#5a5a5a; --white:#ffffff;
+    
+    --score-exc: #1a8f4f; --score-good: #ca8a04; --score-poor: #c0392b;
+    
+    --band-exc-bg: #d1fae5; --band-exc-text: #065f46;
+    --band-good-bg: #dcfce7; --band-good-text: #166534;
+    --band-fair-bg: #fef9c3; --band-fair-text: #854d0e;
+    --band-poor-bg: #fee2e2; --band-poor-text: #991b1b;
+    
+    --insight-pos-bg: #dcfce7; --insight-pos-text: #14532d;
+    --insight-drag-bg: #fee2e2; --insight-drag-text: #7f1d1d;
+    --insight-wi-bg: #fef9c3; --insight-wi-text: #713f12;
+    
+    --insight-border: rgba(0,0,0,0.07);
+    --reasoning-bg: var(--green-100); --reasoning-text: var(--green-900);
+    
+    --card-title-text: var(--green-800); --card-title-border: var(--green-100);
+    --badge-bg: var(--green-100); --badge-text: var(--green-800);
+    --upload-bg: var(--green-100); --upload-border: var(--green-300);
+    --dl-hover-bg: var(--green-100);
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --cream:#0e1117; --sand:#2a2f3a; --bark:#cbd5e1;
+        --ink:#f8fafc; --muted:#94a3b8; --white:#1a1c24;
+        --score-exc: #4ade80; --score-good: #facc15; --score-poor: #f87171;
+        --band-exc-bg: #064e3b; --band-exc-text: #a7f3d0; --band-good-bg: #14532d; --band-good-text: #bbf7d0;
+        --band-fair-bg: #713f12; --band-fair-text: #fef08a; --band-poor-bg: #7f1d1d; --band-poor-text: #fecaca;
+        --insight-pos-bg: #064e3b; --insight-pos-text: #a7f3d0; --insight-drag-bg: #7f1d1d; --insight-drag-text: #fecaca;
+        --insight-wi-bg: #713f12; --insight-wi-text: #fef08a; --insight-border: rgba(255,255,255,0.05);
+        --reasoning-bg: var(--green-900); --reasoning-text: var(--green-100);
+        --card-title-text: var(--green-300); --card-title-border: var(--green-700);
+        --badge-bg: var(--green-800); --badge-text: var(--green-100);
+        --upload-bg: var(--green-900); --upload-border: var(--green-500); --dl-hover-bg: var(--green-900);
+    }
 }
 html,body,[class*="css"]{font-family:'DM Sans',sans-serif;color:var(--ink);}
 .stApp{background:var(--cream);}
@@ -32,41 +68,41 @@ html,body,[class*="css"]{font-family:'DM Sans',sans-serif;color:var(--ink);}
 .hero-title{font-family:'DM Serif Display',serif;font-size:2.4rem;color:#fff;margin:0 0 0.4rem;line-height:1.1;}
 .hero-sub{font-size:0.95rem;color:var(--green-200);margin:0;font-weight:300;}
 .card{background:var(--white);border-radius:12px;padding:1.5rem;box-shadow:0 1px 4px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04);margin-bottom:1.2rem;}
-.card-title{font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--green-300);margin:0 0 1rem;padding-bottom:0.6rem;border-bottom:2px solid var(--green-700);}
+.card-title{font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--card-title-text);margin:0 0 1rem;padding-bottom:0.6rem;border-bottom:2px solid var(--card-title-border);}
 .farmer-nav{display:flex;align-items:center;gap:0.5rem;background:var(--white);border-radius:10px;padding:0.8rem 1rem;margin-bottom:1.5rem;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
-.farmer-badge{background:var(--green-800);color:var(--green-100);border-radius:6px;padding:0.25rem 0.7rem;font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;}
+.farmer-badge{background:var(--badge-bg);color:var(--badge-text);border-radius:6px;padding:0.25rem 0.7rem;font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;}
 .farmer-name{font-family:'DM Serif Display',serif;font-size:1.3rem;color:var(--ink);}
 .farmer-meta{font-size:0.82rem;color:var(--muted);margin-left:auto;font-family:'DM Mono',monospace;}
 .score-ring-wrap{text-align:center;padding:1.5rem 0;}
 .score-value{font-family:'DM Serif Display',serif;font-size:10rem;font-weight:bold;line-height:2;margin:0;text-shadow: 2px 2px 10px rgba(0,0,0,0.1);}
 .score-band{display:inline-block;border-radius:20px;padding:0.3rem 1.2rem;font-size:0.85rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-top:0.5rem;}
-.band-excellent{background:#064e3b;color:#a7f3d0;}
-.band-good{background:#14532d;color:#bbf7d0;}
-.band-fair{background:#713f12;color:#fef08a;}
-.band-poor{background:#7f1d1d;color:#fecaca;}
+.band-excellent{background:var(--band-exc-bg);color:var(--band-exc-text);}
+.band-good{background:var(--band-good-bg);color:var(--band-good-text);}
+.band-fair{background:var(--band-fair-bg);color:var(--band-fair-text);}
+.band-poor{background:var(--band-poor-bg);color:var(--band-poor-text);}
 .driver-row{display:flex;align-items:center;gap:0.8rem;margin-bottom:0.7rem;}
 .driver-label{font-size:0.8rem;font-weight:500;width:160px;flex-shrink:0;color:var(--ink);font-family:'DM Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .driver-bar-bg{flex:1;background:var(--green-800);border-radius:4px;height:8px;overflow:hidden;}
 .driver-bar-fill{height:100%;border-radius:4px;}
 .driver-val{font-size:0.78rem;font-family:'DM Mono',monospace;width:52px;text-align:right;}
-.insight-section{border-radius:10px;margin:0.7rem 0;overflow:hidden;border:1px solid rgba(255,255,255,0.05);}
+.insight-section{border-radius:10px;margin:0.7rem 0;overflow:hidden;border:1px solid var(--insight-border);}
 .insight-header{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.85rem;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;}
 .insight-icon{font-size:0.95rem;}
-.positive-header{background:#064e3b;color:#a7f3d0;}
-.drag-header{background:#7f1d1d;color:#fecaca;}
-.whatif-header{background:#713f12;color:#fef08a;}
+.positive-header{background:var(--insight-pos-bg);color:var(--insight-pos-text);}
+.drag-header{background:var(--insight-drag-bg);color:var(--insight-drag-text);}
+.whatif-header{background:var(--insight-wi-bg);color:var(--insight-wi-text);}
 .insight-body{padding:0.75rem 0.85rem;background:var(--white);}
-.whatif-feature{font-family:'DM Serif Display',serif;font-size:1rem;color:var(--green-300);margin-bottom:0.3rem;}
+.whatif-feature{font-family:'DM Serif Display',serif;font-size:1rem;color:var(--card-title-text);margin-bottom:0.3rem;}
 .whatif-advice{font-size:0.85rem;color:var(--ink);line-height:1.55;}
 .upside-badge{display:inline-block;background:#854d0e;color:#fef08a;border-radius:20px;padding:0.12rem 0.6rem;font-size:0.7rem;font-weight:700;letter-spacing:0.04em;margin-left:0.4rem;vertical-align:middle;}
-.reasoning-box{background:var(--green-900);border-left:3px solid var(--green-500);border-radius:0 8px 8px 0;padding:0.9rem 1.1rem;font-size:0.88rem;line-height:1.6;color:var(--green-100);margin-top:0.8rem;}
+.reasoning-box{background:var(--reasoning-bg);border-left:3px solid var(--green-500);border-radius:0 8px 8px 0;padding:0.9rem 1.1rem;font-size:0.88rem;line-height:1.6;color:var(--reasoning-text);margin-top:0.8rem;}
 .info-chip{display:inline-block;background:var(--sand);color:var(--bark);border-radius:6px;padding:0.2rem 0.6rem;font-size:0.75rem;font-weight:500;margin:0.15rem;font-family:'DM Mono',monospace;}
 .stButton > button{background:var(--green-600) !important;color:white !important;border:none !important;border-radius:8px !important;font-weight:600 !important;transition:background 0.2s ease !important;}
 .stButton > button:hover{background:var(--green-500) !important;}
 .stDownloadButton > button{background:transparent !important;color:var(--green-700) !important;border:2px solid var(--green-500) !important;border-radius:8px !important;font-weight:600 !important;}
-.stDownloadButton > button:hover{background:var(--green-900) !important;}
-[data-testid="stFileUploader"]{border:2px dashed var(--green-500) !important;border-radius:12px !important;background:var(--green-900) !important;}
-[data-testid="stMetricValue"]{font-family:'DM Serif Display',serif !important;color:var(--green-300) !important;}
+.stDownloadButton > button:hover{background:var(--dl-hover-bg) !important;}
+[data-testid="stFileUploader"]{border:2px dashed var(--upload-border) !important;border-radius:12px !important;background:var(--upload-bg) !important;}
+[data-testid="stMetricValue"]{font-family:'DM Serif Display',serif !important;color:var(--card-title-text) !important;}
 .block-container{padding-top:2rem !important;}
 </style>
 """, unsafe_allow_html=True)
@@ -309,7 +345,7 @@ def render_reasoning(parsed):
         items_html = ""
         for p in pos:
             val = (" (+%.2f)" % p["value"]) if p["value"] is not None else ""
-            items_html += "<div style='margin-bottom: 0.5rem; color: #4ade80;'>• " + p["label"] + val + "</div>"
+            items_html += "<div style='margin-bottom: 0.5rem; color: var(--score-exc);'>• " + p["label"] + val + "</div>"
         st.markdown(
             "<div class='insight-section'><div class='insight-header positive-header'>"
             "<span class='insight-icon'>📈</span><span>Top Positive Contributors</span></div>"
@@ -320,7 +356,7 @@ def render_reasoning(parsed):
         items_html = ""
         for d in drags:
             val = (" (−%.2f)" % d["value"]) if d["value"] is not None else ""
-            items_html += "<div style='margin-bottom: 0.5rem; color: #f87171;'>• " + d["label"] + val + "</div>"
+            items_html += "<div style='margin-bottom: 0.5rem; color: var(--score-poor);'>• " + d["label"] + val + "</div>"
         st.markdown(
             "<div class='insight-section'><div class='insight-header drag-header'>"
             "<span class='insight-icon'>📉</span><span>Opportunity Gaps</span></div>"
@@ -354,9 +390,9 @@ def band_class(band):
     return "band-poor"
 
 def score_color(score):
-    if score >= 75: return "#4ade80"
-    if score >= 55: return "#facc15"
-    return "#f87171"
+    if score >= 75: return "var(--score-exc)"
+    if score >= 55: return "var(--score-good)"
+    return "var(--score-poor)"
 
 def rkey(fid, model):
     return f"{fid}||{model}"
@@ -524,7 +560,7 @@ with tab_batch:
             # Create a lookup for farmer names from the original upload
             name_lookup = {str(f.get("farmer_id", "")): f.get("farmer_name", "N/A") for f in st.session_state.farmers}
 
-            st.markdown("<p style='font-weight: 600; font-size: 1.1rem; color: var(--green-300);'>Batch Results Breakdown</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-weight: 600; font-size: 1.1rem; color: var(--card-title-text);'>Batch Results Breakdown</p>", unsafe_allow_html=True)
             
             dl_data = []
             for item in batch_results:
@@ -654,7 +690,7 @@ with tab_summary:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
         st.markdown("<hr style='margin:1rem 0'>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size:0.88rem;font-weight:600;color:var(--green-300)'>Detailed Breakdown per Farmer</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:0.88rem;font-weight:600;color:var(--card-title-text)'>Detailed Breakdown per Farmer</p>", unsafe_allow_html=True)
         for key, data in live_results.items():
             fid, mdl = key.split("||", 1)
             name = next((f.get("farmer_name", fid) for f in farmers if str(f.get("farmer_id",""))==fid), fid)
