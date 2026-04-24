@@ -79,56 +79,56 @@ RESPONSE_KEY     = {"ML-based (XGBoost)": "xgboost",        "Rule-based": "rule_
 
 # ─── CSV Parser ───────────────────────────────────────────────────────────────
 def _parse_raw_line(line):
-    vals = line.strip().split(",")
+    vals = [v.strip() for v in line.strip().split(",")]
     idx  = 0
     def take():
-        nonlocal idx
-        v = vals[idx]; idx += 1; return v.strip()
+        nonlocal idx; v = vals[idx]; idx += 1; return v
+
     r = {}
-    r["farmer_id"]            = take()   # Farmer Id
-    r["farmer_name"]          = take()   # Farmer Name
-    r["gender"]               = take()   # Gender
-    r["region"]               = take()   # Region
-    r["drought_flood_index"]  = take()   # Drought Flood Index
-    r["savings_ghs"]          = take()   # Savings Ghs
-    take()                               # Savings Usd — skip
-    r["payment_frequency"]    = take()   # Payment Frequency
-    r["farmer_budget_ghs"]    = take()   # Farmer Budget Ghs
-    # Crop types: consume tokens until we hit a TRUE/FALSE (is_association_member)
+    r["farmer_id"]            = take()   # 1001
+    r["farmer_name"]          = take()   # Ibrahim Tetteh
+    r["gender"]               = take()   # male
+    r["region"]               = take()   # Ashanti
+    r["drought_flood_index"]  = take()   # 20.7
+    r["savings_ghs"]          = take()   # 8198.10
+    r["payment_frequency"]    = take()   # 13
+    r["farmer_budget_ghs"]    = take()   # 20193.41
+
+    # Crop types: consume until TRUE/FALSE
     crops = []
-    while idx < len(vals) and vals[idx].strip().upper() not in BOOL_VALS:
+    while idx < len(vals) and vals[idx].lower() not in {"true", "false"}:
         crops.append(take())
-    r["crop_types"]            = ",".join(crops)
-    r["is_association_member"] = take()
-    r["has_motorbike"]         = take()
-    r["acres"]                 = take()
-    r["satellite_verified"]    = take()
-    r["repayment_rate"]        = take()
-    # Yield data: consume until we hit endorsements (an integer before irrigation_type string)
-    # Strategy: consume until a non-float token that is also not TRUE/FALSE
-    yield_vals = []
-    while idx < len(vals):
-        token = vals[idx].strip()
+    r["crop_types"] = ",".join(crops)   # "staple,cash_crop,vegetable"
+
+    r["is_association_member"] = take()  # TRUE
+    r["has_motorbike"]         = take()  # FALSE
+    r["acres"]                 = take()  # 2.5
+    r["satellite_verified"]    = take()  # TRUE
+    r["repayment_rate"]        = take()  # 95.5
+
+    # Yield: consume only tokens with a decimal point — stops at plain int (endorsements)
+    yields = []
+    while idx < len(vals) and "." in vals[idx]:
         try:
-            float(token)
-            yield_vals.append(take())
+            float(vals[idx]); yields.append(take())
         except ValueError:
             break
-    r["yield_data"]             = ",".join(yield_vals)
-    r["endorsements"]           = take()
-    r["irrigation_type"]        = take()
-    r["irrigation_scheme"]      = take()
-    r["market_access_index"]    = take()
-    r["training_sessions"]      = take()
-    take()                               # Livestock Value Usd — skip (CSV uses USD)
-    take()                               # Alternative Income Usd — skip
-    r["livestock_value_ghs"]    = "0"   # not in CSV, default
-    r["alternative_income_ghs"] = "0"   # not in CSV, default
-    r["insurance_type"]         = take()
-    r["insurance_subscription"] = take()
-    r["digital_score"]          = take()
-    r["soil_health_index"]      = take()
-    # skip Credit Score and Creditworthiness (last 2 cols)
+    r["yield_data"] = ",".join(yields)   # "111.3,133.0,125.9"
+
+    r["endorsements"]        = take()   # 3
+    r["irrigation_type"]     = take()   # canal
+    r["irrigation_scheme"]   = take()   # FALSE
+    r["market_access_index"] = take()   # 100.0
+    r["training_sessions"]   = take()   # 8
+    # CSV has USD values here — convert to GHS using a 1:1 passthrough
+    # (API field name says GHS but CSV only has USD; send as-is, values are still useful)
+    r["livestock_value_ghs"]    = take()  # 191.44 (was Livestock Value Usd)
+    r["alternative_income_ghs"] = take()  # 39.05  (was Alternative Income Usd)
+    r["insurance_type"]         = take()  # both
+    r["insurance_subscription"] = take()  # TRUE
+    r["digital_score"]          = take()  # 100.0
+    r["soil_health_index"]      = take()  # 75.9
+    # skip Credit Score, Creditworthiness (last 2 cols)
     return r
 
 def _coerce(val):
@@ -553,15 +553,32 @@ with tab_batch:
             raw = None
             with st.spinner("Processing batch… (may take several minutes)"):
                 try:
-                    clean_farmers = [build_payload(f) for f in st.session_state.farmers]
-                    for f in clean_farmers:
-                        if "yield_data" in f:
-                            f["yield_data"] = str(f["yield_data"])
-                    clean_csv_str  = pd.DataFrame(clean_farmers).to_csv(index=False)
-                    clean_file_obj = io.BytesIO(clean_csv_str.encode("utf-8"))
-                    raw = call_batch_api(base_url, clean_file_obj)
+                    # The raw CSV has a complex, variable structure.
+                    # We parse it using `load_csv` (already done when uploaded),
+                    # then rebuild a clean, standard CSV to send to the API.
+                    farmers_data = st.session_state.get("farmers")
+                    if not farmers_data:
+                        st.error("No farmer data has been loaded or parsed. Please re-upload the file.")
+                        st.stop()
+
+                    # The API expects a CSV with columns in a specific order.
+                    api_columns = [
+                        "farmer_id", "farmer_name", "gender", "region", "drought_flood_index",
+                        "savings_ghs", "payment_frequency", "farmer_budget_ghs", "crop_types",
+                        "is_association_member", "has_motorbike", "acres", "satellite_verified",
+                        "repayment_rate", "yield_data", "endorsements", "irrigation_type",
+                        "irrigation_scheme", "market_access_index", "training_sessions",
+                        "livestock_value_ghs", "alternative_income_ghs", "insurance_type",
+                        "insurance_subscription", "digital_score", "soil_health_index"
+                    ]
+                    df = pd.DataFrame(farmers_data)
+                    df_clean = df.reindex(columns=api_columns)
+
+                    # Convert the clean DataFrame to CSV bytes and send.
+                    clean_csv_bytes = df_clean.to_csv(index=False).encode('utf-8')
+                    raw = call_batch_api(base_url, io.BytesIO(clean_csv_bytes))
                 except Exception as e:
-                    st.error(f"Failed to pre-process CSV: {e}")
+                    st.error(f"Failed to process or send CSV: {e}")
 
             if raw is not None:
                 batch_res = []
