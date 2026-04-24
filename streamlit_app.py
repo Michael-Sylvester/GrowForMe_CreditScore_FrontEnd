@@ -509,31 +509,30 @@ with tab_batch:
         st.success(f"✅ Batch processing completed! {len(batch_results)} farmer(s) scored.")
 
         if batch_results:
-            # Create a normalized list of dictionaries for robust display
-            display_data = []
-            for item in batch_results:
-                display_data.append({
-                    "farmer_id": item.get("farmer_id"),
-                    "score": item.get("score", 0),
-                    "band": item.get("band", "—"),
-                    "reasoning": item.get("reasoning", "")
-                })
-            df_results = pd.DataFrame(display_data)
-
             # Create a lookup for farmer names from the original upload
             name_lookup = {str(f.get("farmer_id", "")): f.get("farmer_name", "N/A") for f in st.session_state.farmers}
-            df_results['farmer_name'] = df_results['farmer_id'].fillna("").astype(str).map(name_lookup).fillna('N/A')
 
-            # Define and reorder columns for a clean display
-            display_cols = ['farmer_id', 'farmer_name', 'score', 'band', 'reasoning']
-            final_cols = [col for col in display_cols if col in df_results.columns]
+            st.markdown("<p style='font-weight: 600; font-size: 1.1rem; color: var(--green-800);'>Batch Results Breakdown</p>", unsafe_allow_html=True)
+            
+            dl_data = []
+            for item in batch_results:
+                fid = str(item.get("farmer_id", ""))
+                fname = name_lookup.get(fid, "Unknown Farmer")
+                score = item.get("score", 0)
+                band = item.get("band", "—")
+                reasoning = item.get("reasoning", "")
+                
+                dl_data.append({"farmer_id": fid, "farmer_name": fname, "score": score, "band": band, "reasoning": reasoning})
+                
+                # Display the individual results beautifully in an expander instead of a DataFrame
+                with st.expander(f"**{fname}** (ID: {fid}) · Score: {score:.1f} — {band}"):
+                    st.markdown(f"<div style='text-align:center;padding:0.8rem 0'><span style='font-family:DM Serif Display,serif;font-size:2.5rem;color:{score_color(score)}'>{score:.1f}</span>&nbsp;<span class='score-band {band_class(band)}'>{band}</span></div>", unsafe_allow_html=True)
+                    render_reasoning(parse_reasoning(reasoning))
 
-            st.dataframe(df_results[final_cols], use_container_width=True, hide_index=True)
-
+            st.markdown("<hr style='margin:1.5rem 0'>", unsafe_allow_html=True)
             col_dl, col_rst = st.columns([3, 1])
             with col_dl:
-                # Use the created DataFrame for the download button
-                dl_csv = df_results[final_cols].to_csv(index=False)
+                dl_csv = pd.DataFrame(dl_data).to_csv(index=False) if dl_data else ""
                 st.download_button("⬇ Download Batch Results", data=dl_csv,
                                    file_name=f"batch_scores_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                                    mime="text/csv", use_container_width=True)
