@@ -92,8 +92,7 @@ def _parse_raw_line(line):
     r["drought_flood_index"]  = take()   # 20.7
     r["savings_ghs"]          = take()   # 8198.10
     r["payment_frequency"]    = take()   # 13
-    r["farmer_budget_ghs"]    = take()   # 20193.41
-
+    
     # Crop types: consume until TRUE/FALSE
     crops = []
     while idx < len(vals) and vals[idx].lower() not in {"true", "false"}:
@@ -128,7 +127,7 @@ def _parse_raw_line(line):
     r["insurance_subscription"] = take()  # TRUE
     r["digital_score"]          = take()  # 100.0
     r["soil_health_index"]      = take()  # 75.9
-    # skip Credit Score, Creditworthiness (last 2 cols)
+    r["farmer_budget_ghs"]    = take()  # (moved to match form order)
     return r
 
 def _coerce(val):
