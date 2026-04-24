@@ -599,8 +599,6 @@ with tab_batch:
                     # Store the raw batch results in the session to update the UI, then trigger a refresh.
                     st.session_state.batch_results = batch_res
                     st.rerun()
-            else:
-                st.error("Batch processing failed. Please check the console for API errors or review the uploaded CSV format.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
