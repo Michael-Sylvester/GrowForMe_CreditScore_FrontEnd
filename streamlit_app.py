@@ -263,6 +263,8 @@ def call_batch_api(base_url, file_obj):
 
 # ─── Reasoning Parser & Renderer ─────────────────────────────────────────────
 def parse_reasoning(text):
+    if not isinstance(text, str):
+        text = str(text or "")
     r = {"positives":[],"drags":[],"whatif_feature":"","whatif_advice":"","whatif_upside":"","raw":text}
     pos_m = _re.search(r"(?:Top positive contributors|Positive factors|Strengths|Advantages):\s*(.+?)(?:\.\s*(?:Biggest drags|Opportunity gaps|Negative factors|Drawbacks|What-if|Recommendation|Suggested|Improvement):|$)", text, _re.IGNORECASE)
     if pos_m:
@@ -358,6 +360,10 @@ def score_color(score):
 
 def rkey(fid, model):
     return f"{fid}||{model}"
+
+def safe_float(val, default=0.0):
+    try: return float(val) if val is not None else default
+    except (ValueError, TypeError): return default
 
 def build_results_csv(results):
     rows = []
@@ -457,9 +463,10 @@ with tab_rule:
         
         if raw:
             md = raw.get(RESPONSE_KEY["Rule-based"], raw)
-            st.session_state.results[rk] = {"score": md.get("score",0), "band": md.get("band","—"), "reasoning": md.get("reasoning","")}
-            
-            sc = md.get("score", 0); bd = md.get("band", "—"); rs = md.get("reasoning", "")
+            sc = safe_float(md.get("score", 0))
+            bd = str(md.get("band", "—") or "—")
+            rs = str(md.get("reasoning", "") or "")
+            st.session_state.results[rk] = {"score": sc, "band": bd, "reasoning": rs}
             st.markdown(f"<div class='score-ring-wrap'><p class='score-value' style='color:{score_color(sc)}'>{sc:.1f}</p><span class='score-band {band_class(bd)}'>{bd}</span><p style='font-size:0.75rem;color:var(--muted);margin-top:0.5rem'>out of 100</p></div>", unsafe_allow_html=True)
             render_reasoning(parse_reasoning(rs))
         else:
@@ -484,9 +491,10 @@ with tab_ml:
         
         if raw:
             md = raw.get(RESPONSE_KEY["ML-based (XGBoost)"], raw)
-            st.session_state.results[rk] = {"score": md.get("score",0), "band": md.get("band","—"), "reasoning": md.get("reasoning","")}
-            
-            sc = md.get("score", 0); bd = md.get("band", "—"); rs = md.get("reasoning", "")
+            sc = safe_float(md.get("score", 0))
+            bd = str(md.get("band", "—") or "—")
+            rs = str(md.get("reasoning", "") or "")
+            st.session_state.results[rk] = {"score": sc, "band": bd, "reasoning": rs}
             st.markdown(f"<div class='score-ring-wrap'><p class='score-value' style='color:{score_color(sc)}'>{sc:.1f}</p><span class='score-band {band_class(bd)}'>{bd}</span><p style='font-size:0.75rem;color:var(--muted);margin-top:0.5rem'>out of 100</p></div>", unsafe_allow_html=True)
             render_reasoning(parse_reasoning(rs))
         else:
@@ -518,9 +526,9 @@ with tab_batch:
             for item in batch_results:
                 fid = str(item.get("farmer_id", ""))
                 fname = name_lookup.get(fid, "Unknown Farmer")
-                score = item.get("score", 0)
-                band = item.get("band", "—")
-                reasoning = item.get("reasoning", "")
+                score = safe_float(item.get("score", 0))
+                band  = str(item.get("band", "—") or "—")
+                reasoning = str(item.get("reasoning", "") or "")
                 
                 dl_data.append({"farmer_id": fid, "farmer_name": fname, "score": score, "band": band, "reasoning": reasoning})
                 
@@ -603,9 +611,9 @@ with tab_batch:
                         # We only add it to the main results dict if the ID is not empty.
                         if fid:
                             st.session_state.results[rkey(fid, "Rule-based")] = {
-                                "score":     result.get("score", 0),
-                                "band":      result.get("band", "—"),
-                                "reasoning": result.get("reasoning", ""),
+                                "score":     safe_float(result.get("score", 0)),
+                                "band":      str(result.get("band", "—") or "—"),
+                                "reasoning": str(result.get("reasoning", "") or ""),
                             }
                     # Store the raw batch results in the session to update the UI, then trigger a refresh.
                     st.session_state.batch_results = batch_res
@@ -624,12 +632,16 @@ with tab_summary:
         for key, data in live_results.items():
             fid, mdl = key.split("||", 1)
             name = next((f.get("farmer_name", fid) for f in farmers if str(f.get("farmer_id",""))==fid), fid)
-            p    = parse_reasoning(data.get("reasoning",""))
+            
+            sc = safe_float(data.get("score", 0))
+            bd = str(data.get("band", "—") or "—")
+            rs = str(data.get("reasoning", "") or "")
+            p    = parse_reasoning(rs)
             pos  = p.get("positives",[])
             drgs = p.get("drags",[])
             rows.append({
                 "Farmer ID":    fid, "Farmer Name": name, "Model": mdl,
-                "Score":        round(data["score"],2), "Band": data["band"],
+                "Score":        round(sc, 2), "Band": bd,
                 "Top Positive": pos[0]["label"]  if pos  else "—",
                 "Top Gap":      drgs[0]["label"] if drgs else "—",
                 "What-If":      p.get("whatif_feature","—"),
@@ -642,10 +654,12 @@ with tab_summary:
         for key, data in live_results.items():
             fid, mdl = key.split("||", 1)
             name = next((f.get("farmer_name", fid) for f in farmers if str(f.get("farmer_id",""))==fid), fid)
-            sc   = data["score"]; bd = data["band"]
+            sc = safe_float(data.get("score", 0))
+            bd = str(data.get("band", "—") or "—")
+            rs = str(data.get("reasoning", "") or "")
             with st.expander(f"**{name}** (ID {fid}) · {mdl} · {sc:.1f} — {bd}"):
                 st.markdown(f"<div style='text-align:center;padding:0.8rem 0'><span style='font-family:DM Serif Display,serif;font-size:2.5rem;color:{score_color(sc)}'>{sc:.1f}</span>&nbsp;<span class='score-band {band_class(bd)}'>{bd}</span></div>", unsafe_allow_html=True)
-                render_reasoning(parse_reasoning(data["reasoning"]))
+                render_reasoning(parse_reasoning(rs))
 
         st.markdown("<hr style='margin:1rem 0'>", unsafe_allow_html=True)
         st.download_button("⬇ Download Results CSV", data=build_results_csv(live_results),
