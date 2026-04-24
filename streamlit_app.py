@@ -425,16 +425,20 @@ uploaded = st.file_uploader("Drop your farmer_data.csv here", type=["csv"], labe
 if uploaded:
     try:
         uploaded.seek(0)
-        st.session_state.raw_csv = uploaded.read()
-        uploaded.seek(0)
-        farmers = load_csv(uploaded)
-        st.session_state.farmers  = farmers
-        st.session_state.page_idx = 0
-        st.session_state.results  = {}
-        st.session_state.batch_results = None
-        st.success(f"✅ Loaded **{len(farmers)} farmer{'s' if len(farmers)!=1 else ''}** from `{uploaded.name}`")
+        current_file_bytes = uploaded.read()
+        
+        # Only re-parse and reset if the user uploaded a new file
+        if st.session_state.raw_csv != current_file_bytes:
+            st.session_state.raw_csv = current_file_bytes
+            uploaded.seek(0)
+            st.session_state.farmers = load_csv(uploaded)
+            st.session_state.page_idx = 0
+            st.session_state.results  = {}
+            st.session_state.batch_results = None
+            
+        st.success(f"✅ Loaded **{len(st.session_state.farmers)} farmer{'s' if len(st.session_state.farmers)!=1 else ''}** from `{uploaded.name}`")
         with st.expander("Preview parsed data"):
-            st.dataframe(pd.DataFrame(farmers), use_container_width=True, height=180)
+            st.dataframe(pd.DataFrame(st.session_state.farmers), use_container_width=True, height=180)
     except Exception as e:
         st.error(f"Could not parse CSV: {e}")
 st.markdown("</div>", unsafe_allow_html=True)
