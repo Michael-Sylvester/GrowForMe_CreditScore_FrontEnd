@@ -508,40 +508,34 @@ with tab_batch:
         batch_results = st.session_state.batch_results
         st.success(f"✅ Batch processing completed! {len(batch_results)} farmer(s) scored.")
 
-        name_lookup = {str(f.get("farmer_id", "")): f.get("farmer_name", "") for f in st.session_state.farmers}
+        if batch_results:
+            # Directly convert the API response list to a DataFrame for robust display
+            df_results = pd.DataFrame(batch_results)
 
-        rows = []
-        for result in batch_results:
-            fid  = str(result.get("farmer_id", ""))
-            name = name_lookup.get(fid, fid)
-            p    = parse_reasoning(result.get("reasoning", ""))
-            pos  = p.get("positives", [])
-            drgs = p.get("drags", [])
-            rows.append({
-                "Farmer ID":    fid,
-                "Farmer Name":  name,
-                "Score":        round(float(result.get("score", 0)), 2),
-                "Band":         result.get("band", "—"),
-                "Top Positive": pos[0]["label"]  if pos  else "—",
-                "Top Gap":      drgs[0]["label"] if drgs else "—",
-            })
+            # Create a lookup for farmer names from the original upload
+            name_lookup = {f.get("farmer_id"): f.get("farmer_name", "N/A") for f in st.session_state.farmers}
+            df_results['farmer_name'] = df_results['farmer_id'].map(name_lookup).fillna('N/A')
 
-        if rows:
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            # Define and reorder columns for a clean display
+            display_cols = ['farmer_id', 'farmer_name', 'score', 'band', 'reasoning']
+            final_cols = [col for col in display_cols if col in df_results.columns]
+
+            st.dataframe(df_results[final_cols], use_container_width=True, hide_index=True)
+
+            col_dl, col_rst = st.columns([3, 1])
+            with col_dl:
+                # Use the created DataFrame for the download button
+                dl_csv = df_results[final_cols].to_csv(index=False)
+                st.download_button("⬇ Download Batch Results", data=dl_csv,
+                                   file_name=f"batch_scores_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
+                                   mime="text/csv", use_container_width=True)
+            with col_rst:
+                if st.button("Reset Batch", use_container_width=True):
+                    st.session_state.batch_results = None
+                    st.rerun()
         else:
-            st.warning("Results received but no rows could be parsed. Raw sample:")
-            st.json(batch_results[:2])
-
-        col_dl, col_rst = st.columns([3, 1])
-        with col_dl:
-            dl_csv = pd.DataFrame(rows).to_csv(index=False) if rows else ""
-            st.download_button("⬇ Download Batch Results", data=dl_csv,
-                               file_name=f"batch_scores_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                               mime="text/csv", use_container_width=True)
-        with col_rst:
-            if st.button("Reset Batch", use_container_width=True):
-                st.session_state.batch_results = None
-                st.rerun()
+            # This handles the case where the API returns an empty list of results
+            st.warning("Batch processing ran successfully but returned no results.")
 
     else:
         # ── No results yet — show preview + process button ──────────────────
