@@ -38,7 +38,7 @@ html,body,[class*="css"]{font-family:'DM Sans',sans-serif;color:var(--ink);}
 .farmer-name{font-family:'DM Serif Display',serif;font-size:1.3rem;color:var(--ink);}
 .farmer-meta{font-size:0.82rem;color:var(--muted);margin-left:auto;font-family:'DM Mono',monospace;}
 .score-ring-wrap{text-align:center;padding:1.5rem 0;}
-.score-value{font-family:'DM Serif Display',serif;font-size:20rem;font-weight:bold;line-height:2;margin:0;text-shadow: 2px 2px 10px rgba(0,0,0,0.1);}
+.score-value{font-family:'DM Serif Display',serif;font-size:10rem;font-weight:bold;line-height:2;margin:0;text-shadow: 2px 2px 10px rgba(0,0,0,0.1);}
 .score-band{display:inline-block;border-radius:20px;padding:0.3rem 1.2rem;font-size:0.85rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-top:0.5rem;}
 .band-excellent{background:#d1fae5;color:#065f46;}
 .band-good{background:#dcfce7;color:#166534;}
