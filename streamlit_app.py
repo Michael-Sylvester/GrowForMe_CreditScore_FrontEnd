@@ -38,7 +38,7 @@ html,body,[class*="css"]{font-family:'DM Sans',sans-serif;color:var(--ink);}
 .farmer-name{font-family:'DM Serif Display',serif;font-size:1.3rem;color:var(--ink);}
 .farmer-meta{font-size:0.82rem;color:var(--muted);margin-left:auto;font-family:'DM Mono',monospace;}
 .score-ring-wrap{text-align:center;padding:1.5rem 0;}
-.score-value{font-family:'DM Serif Display',serif;font-size:20rem;font-weight:bold;line-height:3;margin:0;text-shadow: 2px 2px 10px rgba(0,0,0,0.1);}
+.score-value{font-family:'DM Serif Display',serif;font-size:20rem;font-weight:bold;line-height:2;margin:0;text-shadow: 2px 2px 10px rgba(0,0,0,0.1);}
 .score-band{display:inline-block;border-radius:20px;padding:0.3rem 1.2rem;font-size:0.85rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;margin-top:0.5rem;}
 .band-excellent{background:#d1fae5;color:#065f46;}
 .band-good{background:#dcfce7;color:#166534;}
@@ -471,7 +471,7 @@ with tab_rule:
             bd = str(md.get("band", "—") or "—")
             rs = str(md.get("reasoning", "") or "")
             st.session_state.results[rk] = {"score": sc, "band": bd, "reasoning": rs}
-            st.markdown(f"<div class='score-ring-wrap'><p class='score-value' style='color:{score_color(sc)}'>{sc:.1f}</p><span class='score-band {band_class(bd)}'>{bd}</span><p style='font-size:0.75rem;color:var(--muted);margin-top:0.5rem'>out of 100</p></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='score-ring-wrap'><div style=\"font-family:'DM Serif Display',serif;font-size:7rem;font-weight:bold;line-height:1;color:{score_color(sc)};text-shadow:2px 2px 10px rgba(0,0,0,0.1);margin-bottom:0.5rem;\">{sc:.1f}</div><span class='score-band {band_class(bd)}'>{bd}</span><p style='font-size:0.75rem;color:var(--muted);margin-top:0.5rem'>out of 100</p></div>", unsafe_allow_html=True)
             render_reasoning(parse_reasoning(rs))
         else:
             st.error("Failed to get score. Please try again.")
@@ -499,7 +499,7 @@ with tab_ml:
             bd = str(md.get("band", "—") or "—")
             rs = str(md.get("reasoning", "") or "")
             st.session_state.results[rk] = {"score": sc, "band": bd, "reasoning": rs}
-            st.markdown(f"<div class='score-ring-wrap'><p class='score-value' style='color:{score_color(sc)}'>{sc:.1f}</p><span class='score-band {band_class(bd)}'>{bd}</span><p style='font-size:0.75rem;color:var(--muted);margin-top:0.5rem'>out of 100</p></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='score-ring-wrap'><div style=\"font-family:'DM Serif Display',serif;font-size:7rem;font-weight:bold;line-height:1;color:{score_color(sc)};text-shadow:2px 2px 10px rgba(0,0,0,0.1);margin-bottom:0.5rem;\">{sc:.1f}</div><span class='score-band {band_class(bd)}'>{bd}</span><p style='font-size:0.75rem;color:var(--muted);margin-top:0.5rem'>out of 100</p></div>", unsafe_allow_html=True)
             render_reasoning(parse_reasoning(rs))
         else:
             st.error("Failed to get score. Please try again.")
