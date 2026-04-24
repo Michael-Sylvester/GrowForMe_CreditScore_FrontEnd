@@ -499,7 +499,7 @@ with tab_ml:
             bd = str(md.get("band", "—") or "—")
             rs = str(md.get("reasoning", "") or "")
             st.session_state.results[rk] = {"score": sc, "band": bd, "reasoning": rs}
-            st.markdown(f"<div class='score-ring-wrap'><div style=\"font-family:'DM Serif Display',serif;font-size:7rem;font-weight:bold;line-height:1;color:{score_color(sc)};text-shadow:2px 2px 10px rgba(0,0,0,0.1);margin-bottom:0.5rem;\">{sc:.1f}</div><span class='score-band {band_class(bd)}'>{bd}</span><p style='font-size:0.75rem;color:var(--muted);margin-top:0.5rem'>out of 100</p></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='score-ring-wrap'><div style=\"font-family:'DM Serif Display',serif;font-size:2rem;font-weight:bold;line-height:1;color:{score_color(sc)};text-shadow:2px 2px 10px rgba(0,0,0,0.1);margin-bottom:0.5rem;\">{sc:.1f}</div><span class='score-band {band_class(bd)}'>{bd}</span><p style='font-size:0.75rem;color:var(--muted);margin-top:0.5rem'>out of 100</p></div>", unsafe_allow_html=True)
             render_reasoning(parse_reasoning(rs))
         else:
             st.error("Failed to get score. Please try again.")
