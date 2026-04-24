@@ -91,7 +91,9 @@ def _parse_raw_line(line):
     r["region"]               = take()   # Ashanti
     r["drought_flood_index"]  = take()   # 20.7
     r["savings_ghs"]          = take()   # 8198.10
-    r["payment_frequency"]    = take()   # 13
+    # The API error indicates that the CSV has farmer_budget_ghs before payment_frequency.
+    r["farmer_budget_ghs"]    = take()
+    r["payment_frequency"]    = take()
     
     # Crop types: consume until TRUE/FALSE
     crops = []
@@ -127,7 +129,6 @@ def _parse_raw_line(line):
     r["insurance_subscription"] = take()  # TRUE
     r["digital_score"]          = take()  # 100.0
     r["soil_health_index"]      = take()  # 75.9
-    r["farmer_budget_ghs"]    = take()  # (moved to match form order)
     return r
 
 def _coerce(val):
