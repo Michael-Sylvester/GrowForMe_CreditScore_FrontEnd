@@ -600,7 +600,7 @@ with tab_batch:
                     st.session_state.batch_results = batch_res
                     st.rerun()
             else:
-                st.error("Batch processing failed. Please try again.")
+                st.error("Batch processing failed. Please check the console for API errors or review the uploaded CSV format.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
